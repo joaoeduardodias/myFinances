@@ -1,3 +1,187 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { RefreshCw, TriangleAlert } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
+import { toast } from 'sonner'
+
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import { type Dashboard, getDashboard, syncAll } from '@/http/dashboard'
+import { formatBRL, formatDate } from '@/lib/format'
+
+const linkClass = 'font-medium underline underline-offset-4'
+
+function Notice({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      role="status"
+      className="bg-muted text-muted-foreground flex items-start gap-3 rounded-lg border p-4 text-sm"
+    >
+      <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <p>{children}</p>
+    </div>
+  )
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="grid gap-4 md:grid-cols-2" aria-busy="true">
+      <Skeleton className="h-40 md:col-span-2" />
+      <Skeleton className="h-32" />
+      <Skeleton className="h-56" />
+    </div>
+  )
+}
+
+function DashboardContent({ data }: { data: Dashboard }) {
+  const { nextIncome, windowEnd } = data
+  const untilDate = nextIncome?.date ?? windowEnd
+  const perDayTarget = nextIncome
+    ? `${nextIncome.description} (${formatDate(nextIncome.date)})`
+    : `o fim do mês (${formatDate(windowEnd)})`
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <Card className="md:col-span-2">
+        <CardHeader>
+          <CardDescription>Quanto posso gastar</CardDescription>
+          <CardTitle
+            className={`text-4xl font-semibold tabular-nums sm:text-5xl ${
+              data.availableCents < 0 ? 'text-destructive' : ''
+            }`}
+          >
+            {formatBRL(data.availableCents)}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground tabular-nums">
+            {`${formatBRL(data.perDayCents)}/dia até ${perDayTarget}`}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardDescription>Saldo hoje</CardDescription>
+          <CardTitle className="text-2xl font-semibold tabular-nums">
+            {formatBRL(data.balanceCents)}
+          </CardTitle>
+        </CardHeader>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardDescription>{`A pagar até ${formatDate(untilDate)}`}</CardDescription>
+          <CardTitle className="text-2xl font-semibold tabular-nums">
+            {formatBRL(data.payableTotalCents)}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {data.payables.length === 0 ? (
+            <p className="text-muted-foreground text-sm">Nada a pagar até lá</p>
+          ) : (
+            <ul className="divide-y text-sm">
+              {data.payables.map((p) => (
+                <li
+                  key={`${p.kind}-${p.refId}`}
+                  className="flex items-baseline gap-3 py-2"
+                >
+                  <span className="text-muted-foreground w-24 shrink-0 tabular-nums sm:w-auto">
+                    {formatDate(p.dueDate)}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {p.description}
+                  </span>
+                  <span className="tabular-nums">
+                    {formatBRL(p.amountCents)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 export function Home() {
-  return <h1 className="p-6 text-xl font-semibold">Início</h1>
+  const queryClient = useQueryClient()
+  const { data, isPending, isError, refetch } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: getDashboard,
+  })
+
+  const sync = useMutation({
+    mutationFn: (force: boolean) => syncAll(force),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+    onError: () =>
+      toast.error('Não foi possível sincronizar agora. Tente novamente.'),
+  })
+
+  // Uma sincronização por montagem (o guard evita a duplicada do StrictMode).
+  const started = useRef(false)
+  useEffect(() => {
+    if (started.current) return
+    started.current = true
+    sync.mutate(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4 sm:p-6">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold">Início</h1>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={sync.isPending}
+          onClick={() => sync.mutate(true)}
+        >
+          <RefreshCw
+            className={sync.isPending ? 'animate-spin' : ''}
+            aria-hidden
+          />
+          Sincronizar
+        </Button>
+      </div>
+
+      {data?.noIncomeConfigured && (
+        <Notice>
+          Confirme seu salário em{' '}
+          <Link to="/recorrentes" className={linkClass}>
+            Recorrentes
+          </Link>{' '}
+          para a projeção ir até o próximo recebimento.
+        </Notice>
+      )}
+      {data && data.cardsMissingCycle.length > 0 && (
+        <Notice>
+          Configure o ciclo de fatura em{' '}
+          <Link to="/cartoes" className={linkClass}>
+            Cartões
+          </Link>
+          : {data.cardsMissingCycle.map((c) => c.name).join(', ')}.
+        </Notice>
+      )}
+
+      {isPending && <DashboardSkeleton />}
+      {isError && (
+        <div className="flex flex-col items-start gap-3 rounded-lg border p-4">
+          <p className="text-sm">Não foi possível carregar seus dados.</p>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            Tentar novamente
+          </Button>
+        </div>
+      )}
+      {data && <DashboardContent data={data} />}
+    </div>
+  )
 }
