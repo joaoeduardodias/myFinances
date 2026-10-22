@@ -1,11 +1,8 @@
+import { fromDbDate, toDbDate } from '@/lib/db-date'
 import { addDays } from '@/lib/finance/business-days'
 import { detectRecurrenceCandidates, WINDOW_DAYS } from '@/lib/finance/detect-recurrences'
 import { prisma } from '@/lib/prisma'
 import { type IsoDate, todayIso } from '@/lib/today'
-
-function toDbDate(date: IsoDate): Date {
-  return new Date(`${date}T00:00:00Z`)
-}
 
 /** Grava como `SUGGESTED` as recorrências novas do histórico e devolve quantas criou. */
 export async function detectAndStoreRecurrences(
@@ -33,7 +30,7 @@ export async function detectAndStoreRecurrences(
     select: { accountId: true, descriptionKey: true, direction: true },
   })
 
-  const txs = rows.map((r) => ({ ...r, date: r.date.toISOString().slice(0, 10) }))
+  const txs = rows.map((r) => ({ ...r, date: fromDbDate(r.date) }))
   const candidates = detectRecurrenceCandidates(txs, known, today)
   if (candidates.length === 0) return 0
 

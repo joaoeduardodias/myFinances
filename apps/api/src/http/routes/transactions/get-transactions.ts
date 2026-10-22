@@ -3,13 +3,13 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 
 import { auth } from '@/http/middlewares/auth'
+import { toDbDate } from '@/lib/db-date'
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@/prisma/generated/client'
 
 import {
   isoDate,
   serializeTransaction,
-  toDate,
   transactionSchema,
   transactionSelect,
 } from './transaction-schema'
@@ -51,7 +51,7 @@ export async function getTransactions(app: FastifyInstance) {
 
         const where: Prisma.TransactionWhereInput = { userId }
         if (from || to) {
-          where.date = { ...(from ? { gte: toDate(from) } : {}), ...(to ? { lte: toDate(to) } : {}) }
+          where.date = { ...(from ? { gte: toDbDate(from) } : {}), ...(to ? { lte: toDbDate(to) } : {}) }
         }
         if (accountId) where.accountId = accountId
         if (category) where.category = category === 'none' ? null : category

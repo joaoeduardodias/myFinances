@@ -4,7 +4,7 @@ import { addDays } from './business-days'
 import type { CardBillView } from './card-bills'
 import { expectedDates, type RecurrenceRule } from './recurrence-schedule'
 
-type AccountType = 'BANK' | 'CREDIT' | 'WALLET'
+export type AccountType = 'BANK' | 'CREDIT' | 'WALLET'
 
 export type ProjectionTx = {
   accountId: string
@@ -118,8 +118,10 @@ export function computeProjection(input: {
   recurrences: ProjectionRecurrence[]
   transactions: ProjectionTx[]
   cardBills: CardBillView[]
+  /** Nome de cada cartão por `accountId`, para o rótulo da fatura. */
+  cardNames?: Record<string, string>
 }): Projection {
-  const { today, accounts, recurrences, transactions, cardBills } = input
+  const { today, accounts, recurrences, transactions, cardBills, cardNames = {} } = input
   // Ocorrência de até 5 dias atrás que ainda não aconteceu continua valendo.
   const from = addDays(today, -MATCH_WINDOW_DAYS)
 
@@ -163,8 +165,9 @@ export function computeProjection(input: {
     .filter((b) => b.remainingCents > 0 && b.dueDate >= from && b.dueDate <= windowEnd)
     .map((b) => ({
       kind: 'BILL' as const,
-      refId: b.accountId,
-      description: 'Fatura do cartão',
+      // O cartão tem uma fatura por vencimento; só o `accountId` repetiria a chave.
+      refId: `${b.accountId}:${b.dueDate}`,
+      description: cardNames[b.accountId] ? `Fatura ${cardNames[b.accountId]}` : 'Fatura do cartão',
       dueDate: b.dueDate,
       amountCents: b.remainingCents,
     }))

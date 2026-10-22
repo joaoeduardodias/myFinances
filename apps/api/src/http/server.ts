@@ -25,12 +25,15 @@ import { createUser } from './routes/auth/create-user'
 import { getProfile } from './routes/auth/get-profile'
 import { logout } from './routes/auth/logout'
 import { refreshSession } from './routes/auth/refresh-session'
+import { getCards } from './routes/cards/get-cards'
+import { updateCardCycle } from './routes/cards/update-card-cycle'
 import { getCategories } from './routes/categories/get-categories'
 import { createConnection } from './routes/connections/create-connection'
 import { deleteConnection } from './routes/connections/delete-connection'
 import { getConnections } from './routes/connections/get-connections'
 import { syncAll } from './routes/connections/sync-all'
 import { syncConnectionRoute } from './routes/connections/sync-connection'
+import { getDashboard } from './routes/dashboard/get-dashboard'
 import { health } from './routes/health/health'
 import { createRecurrence } from './routes/recurrences/create-recurrence'
 import { dismissRecurrence } from './routes/recurrences/dismiss-recurrence'
@@ -141,6 +144,9 @@ app.register(updateTransactionTransfer)
 app.register(createManualTransaction)
 app.register(deleteManualTransaction)
 app.register(getCategories)
+app.register(getCards)
+app.register(updateCardCycle)
+app.register(getDashboard)
 // Sem `PLUGGY_WEBHOOK_SECRET` a rota nem existe: um webhook sem segredo seria
 // um endpoint aberto que dispara sincronizações.
 registerPluggyWebhook(app, env.PLUGGY_WEBHOOK_SECRET)

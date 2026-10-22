@@ -1,5 +1,6 @@
 import { env } from '@myfinances/env'
 
+import { fromDbDate, toDbDate } from '@/lib/db-date'
 import { addDays } from '@/lib/finance/business-days'
 import { mapPluggyCategory } from '@/lib/finance/categories'
 import { descriptionKey } from '@/lib/finance/description-key'
@@ -23,10 +24,6 @@ const TRANSFER_WINDOW_DAYS = 90
 const CLOSING_DAYS_BEFORE_DUE = 7
 
 type SyncedAccount = { id: string; pluggyAccountId: string; type: 'BANK' | 'CREDIT' }
-
-function toDbDate(date: IsoDate): Date {
-  return new Date(`${date}T00:00:00Z`)
-}
 
 function toCentsAbs(value: number): number {
   return Math.round(Math.abs(value) * 100)
@@ -286,7 +283,7 @@ async function pairTransfers(userId: string, today: IsoDate) {
   // Quem já tem par fica de fora mesmo sem `isTransfer`: `transferPairId` é único.
   const txs = rows
     .filter((r) => !r.transferPairId && !r.transferPairOf)
-    .map((r) => ({ ...r, date: r.date.toISOString().slice(0, 10) }))
+    .map((r) => ({ ...r, date: fromDbDate(r.date) }))
 
   const paired = new Set<string>()
   for (const [outId, inId] of detectTransferPairs(txs)) {

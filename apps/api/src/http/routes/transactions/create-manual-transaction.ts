@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 
 import { auth } from '@/http/middlewares/auth'
+import { toDbDate } from '@/lib/db-date'
 import { CATEGORIES } from '@/lib/finance/categories'
 import { descriptionKey } from '@/lib/finance/description-key'
 import { prisma } from '@/lib/prisma'
@@ -11,7 +12,6 @@ import { ensureWalletAccount, recomputeWalletBalance } from '@/services/wallet'
 import {
   isoDate,
   serializeTransaction,
-  toDate,
   transactionSchema,
   transactionSelect,
 } from './transaction-schema'
@@ -47,7 +47,7 @@ export async function createManualTransaction(app: FastifyInstance) {
           data: {
             userId,
             accountId: wallet.id,
-            date: toDate(date),
+            date: toDbDate(date),
             description,
             descriptionKey: descriptionKey(description),
             amountCents,

@@ -87,6 +87,7 @@ const baseInput = {
   recurrences: [salary, voucher, rent],
   transactions: [voucherPaid],
   cardBills: [bill],
+  cardNames: { card: 'Nubank' },
 }
 
 describe('computeProjection', () => {
@@ -105,7 +106,7 @@ describe('computeProjection', () => {
     // 01/11/2026 é domingo e o sábado 31/10 também não é útil: antecipa para 30/10.
     expect(projection.payables).toEqual([
       { kind: 'RECURRENCE', refId: 'rent', description: 'Aluguel', dueDate: '2026-10-30', amountCents: 150000 },
-      { kind: 'BILL', refId: 'card', description: 'Fatura do cartão', dueDate: '2026-11-03', amountCents: 80000 },
+      { kind: 'BILL', refId: 'card:2026-11-03', description: 'Fatura Nubank', dueDate: '2026-11-03', amountCents: 80000 },
     ])
     expect(projection.payableTotalCents).toBe(230000)
     expect(projection.availableCents).toBe(70000)
@@ -116,7 +117,7 @@ describe('computeProjection', () => {
   it('não cobra à parte o recorrente de cartão, que já está na fatura', () => {
     const projection = computeProjection({ ...baseInput, recurrences: [...baseInput.recurrences, netflix] })
 
-    expect(projection.payables.map((p) => p.refId)).toEqual(['rent', 'card'])
+    expect(projection.payables.map((p) => p.refId)).toEqual(['rent', 'card:2026-11-03'])
     expect(projection.availableCents).toBe(70000)
   })
 
@@ -135,7 +136,7 @@ describe('computeProjection', () => {
     })
 
     expect(projection.payables).toEqual([
-      { kind: 'BILL', refId: 'card', description: 'Fatura do cartão', dueDate: '2026-11-03', amountCents: 80000 },
+      { kind: 'BILL', refId: 'card:2026-11-03', description: 'Fatura Nubank', dueDate: '2026-11-03', amountCents: 80000 },
     ])
     expect(projection.nextIncome?.date).toBe('2026-11-09')
   })
@@ -235,7 +236,7 @@ describe('computeProjection', () => {
     })
 
     expect(projection.payables.filter((p) => p.kind === 'BILL')).toEqual([
-      { kind: 'BILL', refId: 'card', description: 'Fatura do cartão', dueDate: '2026-11-03', amountCents: 50000 },
+      { kind: 'BILL', refId: 'card:2026-11-03', description: 'Fatura Nubank', dueDate: '2026-11-03', amountCents: 50000 },
     ])
   })
 
@@ -249,6 +250,20 @@ describe('computeProjection', () => {
       dueDate: '2026-10-30',
       amountCents: 150000,
     })
+  })
+
+  it('identifica cada fatura pelo vencimento e usa nome genérico sem o do cartão', () => {
+    const projection = computeProjection({
+      ...baseInput,
+      recurrences: [salary],
+      cardNames: undefined,
+      cardBills: [bill, { ...bill, dueDate: '2026-11-05' }],
+    })
+
+    expect(projection.payables).toEqual([
+      { kind: 'BILL', refId: 'card:2026-11-03', description: 'Fatura do cartão', dueDate: '2026-11-03', amountCents: 80000 },
+      { kind: 'BILL', refId: 'card:2026-11-05', description: 'Fatura do cartão', dueDate: '2026-11-05', amountCents: 80000 },
+    ])
   })
 
   it('ignora recorrente de entrada em conta de cartão para a janela', () => {
