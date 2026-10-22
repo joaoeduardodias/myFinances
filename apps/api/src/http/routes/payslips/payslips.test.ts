@@ -180,6 +180,20 @@ describe('POST /payslips', () => {
     expect(storageMock.putFile).not.toHaveBeenCalled()
   })
 
+  it('campos de texto demais são recusados antes de ler o arquivo', async () => {
+    const extra = Array.from({ length: 6 }, (_, i) => ({ name: `x${i}`, value: 'y' }))
+    const res = await upload([...extra, ...uploadParts()])
+    expect(res.statusCode).toBe(413)
+    expect(res.json().message).toBe('O formulário tem campos demais.')
+    expect(storageMock.putFile).not.toHaveBeenCalled()
+  })
+
+  it('campo de texto maior que 1 KB é cortado e não passa na validação', async () => {
+    const res = await upload(uploadParts({ competence: `2026-10${'0'.repeat(2000)}` }))
+    expect(res.statusCode).toBe(400)
+    expect(storageMock.putFile).not.toHaveBeenCalled()
+  })
+
   it('o mesmo PDF duas vezes dá 409 com o payslipId', async () => {
     prismaMock.payslip.findUnique.mockResolvedValue({ id: existingId })
 
@@ -278,7 +292,20 @@ describe('GET /payslips/:id', () => {
       isTransfer: false,
       amountCents: { gte: 431950, lte: 432150 },
       date: { gte: new Date('2026-10-01T00:00:00Z'), lte: new Date('2026-11-15T00:00:00Z') },
+      // Estorno no cartão não é salário.
+      account: { type: { in: ['BANK', 'WALLET'] } },
     })
+  })
+
+  it('líquido zero ou negativo não confere', async () => {
+    for (const netCents of [0, -5000]) {
+      prismaMock.payslip.findFirst.mockResolvedValue({ ...row, netCents, lines: [] })
+
+      const res = await call(getPayslip, { method: 'GET', url: `/payslips/${payslipId}` })
+
+      expect(res.json().reconciliation).toEqual({ matched: false, transaction: null })
+    }
+    expect(prismaMock.transaction.findMany).not.toHaveBeenCalled()
   })
 
   it('sem líquido não confere', async () => {

@@ -32,6 +32,8 @@ const fastifyClientErrorMessage: Record<string, string> = {
   // Do `@fastify/multipart`: o limite é o `MAX_PAYSLIP_BYTES` do storage.
   FST_REQ_FILE_TOO_LARGE: 'O arquivo passa de 5 MB',
   FST_FILES_LIMIT: 'Envie um arquivo por vez.',
+  FST_FIELDS_LIMIT: 'O formulário tem campos demais.',
+  FST_PARTS_LIMIT: 'O formulário tem campos demais.',
   FST_INVALID_MULTIPART_CONTENT_TYPE: 'Envie o arquivo como formulário (multipart/form-data).',
 }
 
