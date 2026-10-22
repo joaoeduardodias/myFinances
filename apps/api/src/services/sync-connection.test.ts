@@ -10,7 +10,12 @@ import { makePrismaMock, resetPrismaMocks } from '@/test/helpers'
 
 const prismaMock = makePrismaMock()
 
+const detectAndStoreRecurrencesMock = vi.fn()
+
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
+vi.mock('./detect-and-store-recurrences', () => ({
+  detectAndStoreRecurrences: detectAndStoreRecurrencesMock,
+}))
 
 const { syncConnection } = await import('./sync-connection')
 
@@ -120,6 +125,8 @@ beforeEach(() => {
   prismaMock.transaction.aggregate.mockResolvedValue({ _sum: { amountCents: 0 } })
   prismaMock.cardBill.upsert.mockResolvedValue({})
   prismaMock.account.deleteMany.mockResolvedValue({ count: 0 })
+  detectAndStoreRecurrencesMock.mockReset()
+  detectAndStoreRecurrencesMock.mockResolvedValue(0)
 })
 
 describe('syncConnection', () => {
@@ -138,6 +145,18 @@ describe('syncConnection', () => {
     const last = prismaMock.connection.update.mock.calls.at(-1)?.[0]
     expect(last.data.lastSyncedAt).toBeInstanceOf(Date)
     expect(last.data.lastError).toBeNull()
+  })
+
+  it('detecta recorrentes do usuário antes de gravar lastSyncedAt', async () => {
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    expect(detectAndStoreRecurrencesMock).toHaveBeenCalledWith(USER, TODAY)
+    const detectOrder = detectAndStoreRecurrencesMock.mock.invocationCallOrder[0]
+    const lastUpdateOrder = prismaMock.connection.update.mock.invocationCallOrder.at(-1)!
+    expect(detectOrder).toBeLessThan(lastUpdateOrder)
+    expect(prismaMock.connection.update.mock.calls.at(-1)?.[0].data.lastSyncedAt).toBeInstanceOf(
+      Date,
+    )
   })
 
   it('na primeira sincronização busca desde today − 365', async () => {

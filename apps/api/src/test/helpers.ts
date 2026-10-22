@@ -98,6 +98,7 @@ export function makePrismaMock() {
     transaction: model(),
     cardBill: model(),
     categoryRule: model(),
+    recurrence: model(),
     $transaction: vi.fn((callback) => callback(prisma)),
     $queryRaw: vi.fn(),
     $executeRaw: vi.fn(),

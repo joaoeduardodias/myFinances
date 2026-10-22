@@ -38,6 +38,17 @@ describe('nthBusinessDay', () => {
     expect(nthBusinessDay(2026, 11, 5)).toBe('2026-11-09')
     expect(nthBusinessDay(2026, 9, 5)).toBe('2026-09-08')
   })
+
+  it('aceita o último dia útil do mês', () => {
+    // Outubro de 2026 tem 21 dias úteis (12/10 é feriado).
+    expect(nthBusinessDay(2026, 10, 21)).toBe('2026-10-30')
+  })
+
+  it('recusa n fora dos dias úteis do mês em vez de girar para sempre', () => {
+    expect(() => nthBusinessDay(2026, 10, 0)).toThrow(RangeError)
+    expect(() => nthBusinessDay(2026, 10, 22)).toThrow(RangeError)
+    expect(() => nthBusinessDay(2026, 10, 1.5)).toThrow(RangeError)
+  })
 })
 
 describe('adjustToBusinessDay', () => {

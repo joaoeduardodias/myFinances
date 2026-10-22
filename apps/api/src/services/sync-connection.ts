@@ -14,6 +14,7 @@ import type { PluggyAccount } from '@/lib/pluggy/types'
 import { prisma } from '@/lib/prisma'
 import { type IsoDate, todayIso } from '@/lib/today'
 
+import { detectAndStoreRecurrences } from './detect-and-store-recurrences'
 import { ensureWalletAccount, recomputeWalletBalance } from './wallet'
 
 const FIRST_SYNC_DAYS = 365
@@ -101,6 +102,8 @@ async function runSync(
     await removeAbandonedAccounts(leftAccountIds, userId, connectionId)
     await syncBills(client, accounts, userId)
     await pairTransfers(userId, today)
+    // Depois do pareamento: transferência não vira recorrente.
+    await detectAndStoreRecurrences(userId, today)
 
     await prisma.connection.update({
       where: { id: connectionId },

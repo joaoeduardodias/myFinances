@@ -70,17 +70,25 @@ export function isBusinessDay(date: IsoDate): boolean {
   return !bankHolidays(Number(date.slice(0, 4))).has(date)
 }
 
-/** `month` de 1 a 12. */
+/**
+ * `month` de 1 a 12. Lança `RangeError` se o mês não tiver `n` dias úteis
+ * (`n` vem do usuário em `Recurrence.dayValue`).
+ */
 export function nthBusinessDay(year: number, month: number, n: number): IsoDate {
-  let date: IsoDate = `${year}-${String(month).padStart(2, '0')}-01`
+  if (!Number.isInteger(n) || n < 1) {
+    throw new RangeError(`Dia útil inválido: ${n}`)
+  }
+  const prefix = `${year}-${String(month).padStart(2, '0')}`
+  let date: IsoDate = `${prefix}-01`
   let count = 0
-  while (true) {
+  while (date.startsWith(prefix)) {
     if (isBusinessDay(date)) {
       count += 1
       if (count === n) return date
     }
     date = addDays(date, 1)
   }
+  throw new RangeError(`${prefix} tem só ${count} dias úteis, pedido o ${n}º`)
 }
 
 export function adjustToBusinessDay(
