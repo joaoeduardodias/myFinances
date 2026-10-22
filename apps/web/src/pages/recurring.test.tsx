@@ -27,7 +27,6 @@ const rec = (over: Partial<Recurrence> = {}): Recurrence => ({
   id: 'r1',
   accountId: 'a1',
   description: 'Netflix',
-  descriptionKey: 'netflix',
   direction: 'OUT',
   expectedAmountCents: 5590,
   dayRule: 'DAY_OF_MONTH',
@@ -155,5 +154,36 @@ describe('Recurring', () => {
     expect(screen.queryByText('Spotify')).not.toBeInTheDocument()
     await user.click(toggle)
     expect(await screen.findByText('Spotify')).toBeInTheDocument()
+  })
+
+  it('edits a confirmed recurrence without status, account or direction', async () => {
+    const user = userEvent.setup()
+    renderPage([rec({ status: 'CONFIRMED' })])
+    await user.click(await screen.findByRole('button', { name: /^Editar/ }))
+    const amount = await screen.findByLabelText('Valor (R$)')
+    await user.clear(amount)
+    await user.type(amount, '60,00')
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+    await waitFor(() =>
+      expect(updateRecurrence).toHaveBeenCalledWith('r1', {
+        description: 'Netflix',
+        expectedAmountCents: 6000,
+        dayRule: 'DAY_OF_MONTH',
+        dayValue: 15,
+        nonBusinessDayPolicy: 'ANTICIPATE',
+      }),
+    )
+  })
+
+  it('reactivates a dismissed recurrence', async () => {
+    const user = userEvent.setup()
+    renderPage([rec({ status: 'DISMISSED' })])
+    await user.click(await screen.findByRole('button', { name: /Descartados/ }))
+    await user.click(await screen.findByRole('button', { name: /^Reativar/ }))
+    await waitFor(() =>
+      expect(updateRecurrence).toHaveBeenCalledWith('r1', {
+        status: 'CONFIRMED',
+      }),
+    )
   })
 })

@@ -11,6 +11,7 @@ import {
   dismissRecurrence,
   listRecurrences,
   type Recurrence,
+  updateRecurrence,
 } from '@/http/recurrences'
 import { formatBRL } from '@/lib/format'
 
@@ -96,6 +97,23 @@ export function Recurring() {
       ),
   })
 
+  const reactivate = useMutation({
+    mutationFn: (id: string) => updateRecurrence(id, { status: 'CONFIRMED' }),
+    onSuccess: () =>
+      Promise.all(
+        ['recurrences', 'dashboard'].map((key) =>
+          queryClient.invalidateQueries({ queryKey: [key] }),
+        ),
+      ),
+    onError: async (error) =>
+      toast.error(
+        await getApiErrorMessage(
+          error,
+          'Não foi possível reativar. Tente novamente.',
+        ),
+      ),
+  })
+
   const byStatus = (status: Recurrence['status']) =>
     data?.filter((r) => r.status === status) ?? []
   const dismissed = byStatus('DISMISSED')
@@ -156,7 +174,20 @@ export function Recurring() {
 
           <Section title="Confirmados" empty="Nenhum recorrente confirmado.">
             {byStatus('CONFIRMED').map((r) => (
-              <RecurrenceRow key={r.id} recurrence={r} />
+              <RecurrenceRow
+                key={r.id}
+                recurrence={r}
+                actions={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    aria-label={`Editar ${r.description}`}
+                    onClick={() => setToConfirm(r)}
+                  >
+                    Editar
+                  </Button>
+                }
+              />
             ))}
           </Section>
 
@@ -183,7 +214,21 @@ export function Recurring() {
                 className="divide-y rounded-lg border"
               >
                 {dismissed.map((r) => (
-                  <RecurrenceRow key={r.id} recurrence={r} />
+                  <RecurrenceRow
+                    key={r.id}
+                    recurrence={r}
+                    actions={
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        aria-label={`Reativar ${r.description}`}
+                        disabled={reactivate.isPending}
+                        onClick={() => reactivate.mutate(r.id)}
+                      >
+                        Reativar
+                      </Button>
+                    }
+                  />
                 ))}
               </ul>
             )}

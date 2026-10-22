@@ -9,7 +9,6 @@ export interface Recurrence {
   id: string
   accountId: string
   description: string
-  descriptionKey: string
   direction: RecurrenceDirection
   expectedAmountCents: number
   dayRule: DayRule
