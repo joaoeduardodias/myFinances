@@ -2,8 +2,8 @@ import type { IsoDate } from '@/lib/today'
 
 import {
   adjustToBusinessDay,
-  nthBusinessDay,
   type NonBusinessDayPolicy,
+  nthBusinessDay,
 } from './business-days'
 
 export type RecurrenceRule = {
@@ -35,7 +35,7 @@ export function expectedDates(
   to: IsoDate,
 ): IsoDate[] {
   const dates = new Set<IsoDate>()
-  let year = Number(from.slice(0, 4))
+  const year = Number(from.slice(0, 4))
   let month = Number(from.slice(5, 7)) - 1
   const lastYear = Number(to.slice(0, 4))
   const lastMonth = Number(to.slice(5, 7)) + 1
