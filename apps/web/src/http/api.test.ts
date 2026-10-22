@@ -149,7 +149,9 @@ describe('api — silent refresh on 401', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const { api } = await import('./api')
-    await expect(api.get('transactions').json()).rejects.toThrow('Failed to fetch')
+    await expect(api.get('transactions').json()).rejects.toThrow(
+      'Failed to fetch',
+    )
     expect(endSessionMock).not.toHaveBeenCalled()
   })
 

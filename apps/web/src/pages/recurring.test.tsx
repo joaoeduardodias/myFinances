@@ -163,11 +163,11 @@ describe('Recurring', () => {
     )
     const select = await screen.findByLabelText('Conta')
     await waitFor(() =>
-      expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
-        'Selecione',
-        'Nubank',
-        'Carteira',
-      ]),
+      expect(
+        within(select)
+          .getAllByRole('option')
+          .map((o) => o.textContent),
+      ).toEqual(['Selecione', 'Nubank', 'Carteira']),
     )
   })
 

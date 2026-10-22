@@ -40,7 +40,8 @@ export const api = ky.create({
   // `/sessions`; o resto da API se autentica pelo header abaixo.
   credentials: 'include',
   retry: {
-    shouldRetry: ({ error }) => (refreshFailures.has(error) ? false : undefined),
+    shouldRetry: ({ error }) =>
+      refreshFailures.has(error) ? false : undefined,
   },
   hooks: {
     beforeRequest: [

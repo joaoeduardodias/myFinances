@@ -23,7 +23,9 @@ describe('chamadas que sincronizam com a Pluggy', () => {
 
   it('POST /connections/:id/sync espera até 2 minutos', async () => {
     await syncConnection('c1')
-    expect(post).toHaveBeenCalledWith('connections/c1/sync', { timeout: 120_000 })
+    expect(post).toHaveBeenCalledWith('connections/c1/sync', {
+      timeout: 120_000,
+    })
   })
 
   it('POST /sync espera até 2 minutos', async () => {
