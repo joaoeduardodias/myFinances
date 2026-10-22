@@ -96,12 +96,14 @@ let existingTxs: {
   accountId: string
 }[]
 let pairingRows: PairingRow[]
+let removedRows: { id: string; transferPair: unknown; transferPairOf: unknown }[]
 
 beforeEach(() => {
   resetPrismaMocks(prismaMock)
   prismaMock.$transaction.mockImplementation((callback) => callback(prismaMock))
   existingTxs = []
   pairingRows = []
+  removedRows = []
 
   prismaMock.connection.findUnique.mockResolvedValue({ ...connection })
   prismaMock.connection.update.mockResolvedValue({})
@@ -110,11 +112,18 @@ beforeEach(() => {
     id: `db-${create.pluggyAccountId}`,
     ...create,
   }))
-  prismaMock.account.findFirst.mockResolvedValue({ id: 'wallet-1', type: 'WALLET' })
+  prismaMock.account.findFirst.mockImplementation(async ({ where }) =>
+    where.type === 'WALLET' ? { id: 'wallet-1', type: 'WALLET' } : null,
+  )
   prismaMock.account.update.mockResolvedValue({})
   prismaMock.categoryRule.findMany.mockResolvedValue([])
+  // A leitura antes do upsert pede `in`; a das que sumiram da Pluggy, `notIn`.
   prismaMock.transaction.findMany.mockImplementation(async ({ where }) =>
-    where.pluggyTransactionId ? existingTxs : pairingRows,
+    where.pluggyTransactionId?.in
+      ? existingTxs
+      : where.pluggyTransactionId?.notIn
+        ? removedRows
+        : pairingRows,
   )
   prismaMock.transaction.upsert.mockResolvedValue({})
   prismaMock.transaction.update.mockResolvedValue({})
@@ -124,7 +133,7 @@ beforeEach(() => {
   }))
   prismaMock.transaction.aggregate.mockResolvedValue({ _sum: { amountCents: 0 } })
   prismaMock.cardBill.upsert.mockResolvedValue({})
-  prismaMock.account.deleteMany.mockResolvedValue({ count: 0 })
+  prismaMock.transaction.deleteMany.mockResolvedValue({ count: 0 })
   detectAndStoreRecurrencesMock.mockReset()
   detectAndStoreRecurrencesMock.mockResolvedValue(0)
 })
@@ -339,7 +348,20 @@ describe('syncConnection', () => {
     })
   })
 
+  it('na primeira sincronização pareia o ano inteiro buscado', async () => {
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    const pairingQuery = prismaMock.transaction.findMany.mock.calls.find(
+      ([args]) => !args.where.pluggyTransactionId,
+    )?.[0]
+    expect(pairingQuery.where.date).toEqual({ gte: new Date('2025-10-22T00:00:00Z') })
+  })
+
   it('pareia transferências dos últimos 90 dias nos dois lados', async () => {
+    prismaMock.connection.findUnique.mockResolvedValue({
+      ...connection,
+      lastSyncedAt: new Date('2026-10-20T15:00:00Z'),
+    })
     pairingRows = [
       row({ id: 'out', accountId: 'acc-a', amountCents: -50000, description: 'PIX ENVIADO' }),
       row({ id: 'in', accountId: 'acc-b', amountCents: 50000, description: 'PIX RECEBIDO' }),
@@ -437,34 +459,65 @@ describe('syncConnection', () => {
     expect(prismaMock.account.upsert.mock.calls[0][0].update.connectionId).toBe('conn-1')
   })
 
-  it('remove só a conta antiga, de outra conexão, que ficou sem transações', async () => {
-    existingTxs = [
-      { pluggyTransactionId: 'p-tx-1', userId: USER, categoryLocked: false, accountId: 'db-old' },
-    ]
-
-    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
-
-    // O filtro `transactions: { none: {} }` é o que mantém a conta antiga que
-    // ainda tem transações; o banco decide na mesma query.
-    expect(prismaMock.account.deleteMany).toHaveBeenCalledWith({
-      where: {
-        id: { in: ['db-old'] },
-        userId: USER,
-        connectionId: { not: 'conn-1' },
-        type: { not: 'WALLET' },
-        transactions: { none: {} },
-      },
-    })
-  })
-
-  it('não remove conta nenhuma quando nenhuma transação mudou de conta', async () => {
+  it('não funde conta nenhuma quando nenhuma transação mudou de conta', async () => {
     existingTxs = [
       { pluggyTransactionId: 'p-tx-1', userId: USER, categoryLocked: false, accountId: 'db-p-acc-new' },
     ]
 
     await syncConnection('conn-1', { client: makeClient(), today: TODAY })
 
-    expect(prismaMock.account.deleteMany).not.toHaveBeenCalled()
+    expect(prismaMock.account.delete).not.toHaveBeenCalled()
+    expect(prismaMock.transaction.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('apaga as transações da conta que sumiram da Pluggy depois do dia de corte', async () => {
+    removedRows = [{ id: 'gone', transferPair: null, transferPairOf: null }]
+    prismaMock.connection.findUnique.mockResolvedValue({
+      ...connection,
+      lastSyncedAt: new Date('2026-10-20T15:00:00Z'),
+    })
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    const query = prismaMock.transaction.findMany.mock.calls.find(
+      ([args]) => args.where.pluggyTransactionId?.notIn,
+    )?.[0]
+    expect(query.where).toEqual({
+      userId: USER,
+      accountId: 'db-p-acc-new',
+      source: 'PLUGGY',
+      date: { gt: new Date('2026-09-20T00:00:00Z') },
+      pluggyTransactionId: { notIn: ['p-tx-1'] },
+    })
+    expect(prismaMock.transaction.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ['gone'] } },
+    })
+  })
+
+  it('lista vazia da Pluggy não apaga nada', async () => {
+    const client = makeClient({ listTransactions: vi.fn(async () => []) })
+
+    await syncConnection('conn-1', { client, today: TODAY })
+
+    expect(prismaMock.transaction.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it('entrada no cartão "PAGAMENTO RECEBIDO" sem par vira transferência sozinha', async () => {
+    pairingRows = [
+      row({
+        id: 'card-pay',
+        amountCents: 80000,
+        description: 'PAGAMENTO RECEBIDO',
+        account: { type: 'CREDIT' },
+      }),
+    ]
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+      where: { id: 'card-pay' },
+      data: { isTransfer: true },
+    })
   })
 
   it('entrada de pagamento de fatura no cartão sem par vira transferência sozinha', async () => {

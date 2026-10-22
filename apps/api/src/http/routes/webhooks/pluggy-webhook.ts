@@ -5,12 +5,13 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 
 import { pluggy } from '@/lib/pluggy/client'
+import { itemErrorText } from '@/lib/pluggy/connection-error'
 import { prisma } from '@/lib/prisma'
+import { removeTransactions } from '@/services/remove-transactions'
 import { syncConnection } from '@/services/sync-connection'
 
 import { UnauthorizedError } from '../_errors/unauthorized-error'
 import { WEBHOOK_SECRET_HEADER } from './webhook-secret-header'
-
 
 const bodySchema = z.object({
   event: z.string(),
@@ -57,14 +58,16 @@ export async function processPluggyEvent(
         const item = await pluggy.getItem(itemId)
         await prisma.connection.updateMany({
           where: { pluggyItemId: itemId },
-          data: { status: item.status, lastError: item.error?.message ?? null },
+          data: { status: item.status, lastError: itemErrorText(item.error) },
         })
         return
       }
       case 'transactions/deleted': {
         if (!transactionIds?.length) return
-        await prisma.transaction.deleteMany({
-          where: { pluggyTransactionId: { in: transactionIds } },
+        // Mesma limpeza da sincronização: par desfeito e crédito do saque na Carteira.
+        await removeTransactions({
+          source: 'PLUGGY',
+          pluggyTransactionId: { in: transactionIds },
         })
         break
       }

@@ -6,6 +6,7 @@ const MAX_DAYS_APART = 3
 export type TransferCandidate = {
   id: string
   accountId: string
+  accountType: 'BANK' | 'CREDIT' | 'WALLET'
   date: IsoDate
   amountCents: number
   isTransfer: boolean
@@ -14,6 +15,14 @@ export type TransferCandidate = {
 
 export function isBillPaymentDescription(description: string): boolean {
   return /pag(amento|to)?\.?\s*(de\s*)?fatura/i.test(description)
+}
+
+/**
+ * Entrada no cartão que é pagamento de fatura. O emissor costuma escrever só
+ * "PAGAMENTO RECEBIDO", sem "fatura"; num cartão, uma entrada assim não é estorno.
+ */
+export function isCardPaymentCreditDescription(description: string): boolean {
+  return isBillPaymentDescription(description) || /\bpag(amento|to)\b/i.test(description)
 }
 
 export function isWithdrawalDescription(description: string): boolean {
@@ -28,11 +37,20 @@ function daysApart(a: IsoDate, b: IsoDate): number {
  * Pares `[saída, entrada]` de transferência entre contas do usuário: valores
  * opostos e iguais, contas diferentes, até 3 dias de distância. Cada transação
  * entra em no máximo um par; ganha a data mais próxima e, no empate, o menor id.
+ *
+ * Só banco → banco e banco → cartão (pagamento de fatura). Saída no cartão é
+ * compra, e a Carteira só recebe pelo saque; parear qualquer um deles tiraria
+ * um gasto de verdade das contas.
+ *
+ * Quem chega aqui ainda não tem par: a que já é transferência (pagamento de
+ * fatura marcado sozinho) continua candidata, a travada pelo usuário não.
  */
 export function detectTransferPairs(txs: TransferCandidate[]): [string, string][] {
-  const free = txs.filter((t) => !t.isTransfer && !t.transferLocked && t.amountCents !== 0)
-  const outflows = free.filter((t) => t.amountCents < 0)
-  const inflows = free.filter((t) => t.amountCents > 0)
+  const free = txs.filter((t) => !t.transferLocked && t.amountCents !== 0)
+  const outflows = free.filter((t) => t.amountCents < 0 && t.accountType === 'BANK')
+  const inflows = free.filter(
+    (t) => t.amountCents > 0 && (t.accountType === 'BANK' || t.accountType === 'CREDIT'),
+  )
 
   const candidates: { out: string; in: string; days: number }[] = []
   for (const out of outflows) {

@@ -17,7 +17,10 @@ Monorepo pnpm + Turborepo: `apps/api` (Fastify + Prisma) e `apps/web` (Vite + Re
 - A projeção vai até o próximo recebimento (decisão do João).
 - Recorrente no cartão não entra em "a pagar".
 - Saque vira transferência para a Carteira.
-- Pagamento de fatura nos dois lados é transferência.
+- Pagamento de fatura nos dois lados é transferência; no cartão, "PAGAMENTO"/"PAGTO" sem "fatura" também vale.
+- Pareamento automático só banco↔banco e banco→cartão; compra no cartão e Carteira nunca (Carteira só pelo saque).
+- Item renovado: a conta antiga passa histórico, recorrentes e dias do cartão para a nova e é apagada.
+- Transação que some da Pluggy é apagada, menos com lista vazia (pode ser falha) e no dia do corte (fuso).
 - Descartado nunca volta; PATCH de recorrente não muda conta, direção nem chave.
 - N-ésimo dia útil acima do que o mês tem cai no último dia útil.
 - O webhook só liga com `PLUGGY_WEBHOOK_SECRET`.

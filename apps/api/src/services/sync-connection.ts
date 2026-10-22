@@ -7,15 +7,18 @@ import { descriptionKey } from '@/lib/finance/description-key'
 import {
   detectTransferPairs,
   isBillPaymentDescription,
+  isCardPaymentCreditDescription,
   isWithdrawalDescription,
 } from '@/lib/finance/detect-transfers'
 import { toCents } from '@/lib/finance/money'
 import { pluggy, type PluggyClient } from '@/lib/pluggy/client'
+import { itemErrorText } from '@/lib/pluggy/connection-error'
 import type { PluggyAccount } from '@/lib/pluggy/types'
 import { prisma } from '@/lib/prisma'
 import { type IsoDate, todayIso } from '@/lib/today'
 
 import { detectAndStoreRecurrences } from './detect-and-store-recurrences'
+import { removeTransactions } from './remove-transactions'
 import { ensureWalletAccount, recomputeWalletBalance } from './wallet'
 
 const FIRST_SYNC_DAYS = 365
@@ -44,6 +47,7 @@ function pluggyDate(value: string): IsoDate {
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
+
 
 // Webhook e o botão Sincronizar podem disparar ao mesmo tempo para o mesmo
 // usuário; em paralelo, os upserts colidem (P2002). A API roda numa instância
@@ -86,7 +90,7 @@ async function runSync(
         status: item.status,
         connectorName: item.connector.name,
         consentExpiresAt: item.consentExpiresAt ? new Date(item.consentExpiresAt) : null,
-        lastError: item.error?.message ?? null,
+        lastError: itemErrorText(item.error),
       },
     })
 
@@ -95,16 +99,18 @@ async function runSync(
     const dateFrom = connection.lastSyncedAt
       ? addDays(todayIso(env.TIMEZONE, connection.lastSyncedAt), -RESYNC_OVERLAP_DAYS)
       : addDays(today, -FIRST_SYNC_DAYS)
-    const leftAccountIds = await syncTransactions(client, accounts, userId, dateFrom)
-    await removeAbandonedAccounts(leftAccountIds, userId, connectionId)
+    const renewed = await syncTransactions(client, accounts, userId, dateFrom)
+    await mergeRenewedAccounts(renewed, userId, connectionId)
     await syncBills(client, accounts, userId)
-    await pairTransfers(userId, today)
+    // Na primeira sincronização o ano inteiro é novo e precisa ser pareado.
+    const transferWindowDays = connection.lastSyncedAt ? TRANSFER_WINDOW_DAYS : FIRST_SYNC_DAYS
+    await pairTransfers(userId, today, transferWindowDays)
     // Depois do pareamento: transferência não vira recorrente.
     await detectAndStoreRecurrences(userId, today)
 
     await prisma.connection.update({
       where: { id: connectionId },
-      data: { lastSyncedAt: new Date(), lastError: item.error?.message ?? null },
+      data: { lastSyncedAt: new Date(), lastError: itemErrorText(item.error) },
     })
   } catch (error) {
     await prisma.connection
@@ -172,9 +178,9 @@ async function syncTransactions(
   accounts: SyncedAccount[],
   userId: string,
   dateFrom: IsoDate,
-): Promise<Set<string>> {
-  // Contas de onde alguma transação saiu (item renovado trouxe conta nova).
-  const leftAccountIds = new Set<string>()
+): Promise<Map<string, string>> {
+  // Conta antiga → conta nova, quando uma transação mudou de conta (item renovado).
+  const renewed = new Map<string, string>()
   const rules = await prisma.categoryRule.findMany({
     where: { userId },
     select: { descriptionKey: true, category: true },
@@ -183,7 +189,21 @@ async function syncTransactions(
 
   for (const account of accounts) {
     const remote = await client.listTransactions(account.pluggyAccountId, dateFrom)
+    // Lista vazia pode ser a Pluggy falhando calada; apagar o mês inteiro por
+    // isso custaria categorias e marcas do usuário.
     if (remote.length === 0) continue
+
+    // Sumiu da Pluggy (pendente que virou outra transação, estorno do banco):
+    // sai daqui também, senão conta duas vezes. O dia do `dateFrom` fica de
+    // fora: a data gravada é a do fuso do usuário e pode não bater com o
+    // corte da Pluggy.
+    await removeTransactions({
+      userId,
+      accountId: account.id,
+      source: 'PLUGGY',
+      date: { gt: toDbDate(dateFrom) },
+      pluggyTransactionId: { notIn: remote.map((t) => t.id) },
+    })
 
     // Ler antes para saber de quem é a linha e se a categoria está travada.
     const existing = await prisma.transaction.findMany({
@@ -195,7 +215,9 @@ async function syncTransactions(
     for (const tx of remote) {
       const current = existingById.get(tx.id)
       if (current && current.userId !== userId) continue
-      if (current && current.accountId !== account.id) leftAccountIds.add(current.accountId)
+      if (current && current.accountId !== account.id && !renewed.has(current.accountId)) {
+        renewed.set(current.accountId, account.id)
+      }
 
       const key = descriptionKey(tx.description)
       // Chave vazia (descrição só de dígitos/prefixo) não casa com regra.
@@ -219,29 +241,68 @@ async function syncTransactions(
       })
     }
   }
-  return leftAccountIds
+  return renewed
 }
 
+const RECURRENCE_STATUS_RANK = { CONFIRMED: 2, DISMISSED: 1, SUGGESTED: 0 } as const
+
 /**
- * Renovar o Meu Pluggy cria um item (e uma Connection) novo, com contas novas.
- * A conta antiga, de outra conexão, que ficou sem nenhuma transação é removida
- * para o saldo não contar duas vezes; as faturas dela vão junto (Cascade).
+ * Renovar o Meu Pluggy cria um item (e uma Connection) novo, com contas novas
+ * que trazem as mesmas transações. A conta antiga, de outra conexão, passa
+ * tudo para a nova — inclusive o histórico que a Pluggy já não devolve, as
+ * recorrentes confirmadas/descartadas e os dias do cartão — e é apagada, para
+ * o saldo não contar duas vezes.
  */
-async function removeAbandonedAccounts(
-  accountIds: Set<string>,
+async function mergeRenewedAccounts(
+  renewed: Map<string, string>,
   userId: string,
   connectionId: string,
 ) {
-  if (accountIds.size === 0) return
-  await prisma.account.deleteMany({
-    where: {
-      id: { in: [...accountIds] },
-      userId,
-      connectionId: { not: connectionId },
-      type: { not: 'WALLET' },
-      transactions: { none: {} },
-    },
-  })
+  const recurrenceSelect = {
+    select: { id: true, descriptionKey: true, direction: true, status: true },
+  } as const
+  for (const [oldId, newId] of renewed) {
+    const old = await prisma.account.findFirst({
+      where: { id: oldId, userId, connectionId: { not: connectionId }, type: { not: 'WALLET' } },
+      select: { closingDay: true, dueDay: true, recurrences: recurrenceSelect },
+    })
+    if (!old) continue
+    const target = await prisma.account.findUniqueOrThrow({
+      where: { id: newId },
+      select: { closingDay: true, dueDay: true, recurrences: recurrenceSelect },
+    })
+
+    await prisma.$transaction(async (db) => {
+      await db.transaction.updateMany({ where: { accountId: oldId }, data: { accountId: newId } })
+
+      // Uma recorrente por (conta, chave, direção): na colisão fica a decisão
+      // mais forte do usuário — confirmada, depois descartada, depois sugerida.
+      for (const recurrence of old.recurrences) {
+        const clash = target.recurrences.find(
+          (r) => r.descriptionKey === recurrence.descriptionKey && r.direction === recurrence.direction,
+        )
+        if (clash) {
+          if (RECURRENCE_STATUS_RANK[recurrence.status] <= RECURRENCE_STATUS_RANK[clash.status]) {
+            await db.recurrence.delete({ where: { id: recurrence.id } })
+            continue
+          }
+          await db.recurrence.delete({ where: { id: clash.id } })
+        }
+        await db.recurrence.update({ where: { id: recurrence.id }, data: { accountId: newId } })
+      }
+
+      const cycle = {
+        ...(target.closingDay == null && old.closingDay != null ? { closingDay: old.closingDay } : {}),
+        ...(target.dueDay == null && old.dueDay != null ? { dueDay: old.dueDay } : {}),
+      }
+      if (Object.keys(cycle).length > 0) {
+        await db.account.update({ where: { id: newId }, data: cycle })
+      }
+
+      // As faturas antigas vão junto (Cascade): as da conta nova cobrem o mesmo período.
+      await db.account.delete({ where: { id: oldId } })
+    })
+  }
 }
 
 async function syncBills(client: PluggyClient, accounts: SyncedAccount[], userId: string) {
@@ -264,9 +325,9 @@ async function syncBills(client: PluggyClient, accounts: SyncedAccount[], userId
   }
 }
 
-async function pairTransfers(userId: string, today: IsoDate) {
+async function pairTransfers(userId: string, today: IsoDate, windowDays: number) {
   const rows = await prisma.transaction.findMany({
-    where: { userId, date: { gte: toDbDate(addDays(today, -TRANSFER_WINDOW_DAYS)) } },
+    where: { userId, date: { gte: toDbDate(addDays(today, -windowDays)) } },
     select: {
       id: true,
       accountId: true,
@@ -283,7 +344,7 @@ async function pairTransfers(userId: string, today: IsoDate) {
   // Quem já tem par fica de fora mesmo sem `isTransfer`: `transferPairId` é único.
   const txs = rows
     .filter((r) => !r.transferPairId && !r.transferPairOf)
-    .map((r) => ({ ...r, date: fromDbDate(r.date) }))
+    .map((r) => ({ ...r, accountType: r.account.type, date: fromDbDate(r.date) }))
 
   const paired = new Set<string>()
   for (const [outId, inId] of detectTransferPairs(txs)) {
@@ -308,9 +369,9 @@ async function pairTransfers(userId: string, today: IsoDate) {
     // Pagamento de fatura sem par: a saída no banco e a entrada no cartão são
     // transferência; senão a fatura conta duas vezes ou a entrada vira estorno.
     const billPaymentSide =
-      (tx.account.type === 'BANK' && tx.amountCents < 0) ||
-      (tx.account.type === 'CREDIT' && tx.amountCents > 0)
-    if (billPaymentSide && isBillPaymentDescription(tx.description)) {
+      (tx.account.type === 'BANK' && tx.amountCents < 0 && isBillPaymentDescription(tx.description)) ||
+      (tx.account.type === 'CREDIT' && tx.amountCents > 0 && isCardPaymentCreditDescription(tx.description))
+    if (billPaymentSide) {
       await prisma.transaction.update({ where: { id: tx.id }, data: { isTransfer: true } })
       continue
     }

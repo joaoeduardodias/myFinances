@@ -5,11 +5,15 @@ import { buildTestApp, makePrismaMock, uuid } from '@/test/helpers'
 const prismaMock = makePrismaMock()
 const getItem = vi.fn()
 const syncConnectionMock = vi.fn()
+const removeTransactionsMock = vi.fn()
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/lib/pluggy/client', () => ({ pluggy: { getItem } }))
 vi.mock('@/services/sync-connection', () => ({
   syncConnection: syncConnectionMock,
+}))
+vi.mock('@/services/remove-transactions', () => ({
+  removeTransactions: removeTransactionsMock,
 }))
 
 const { pluggyWebhook, processPluggyEvent, registerPluggyWebhook } =
@@ -91,10 +95,11 @@ describe('processamento', () => {
     expect(syncConnectionMock).toHaveBeenCalledTimes(2)
   })
 
-  it('transactions/deleted → deleteMany com os ids', async () => {
+  it('transactions/deleted → remove as transações da Pluggy com os ids', async () => {
     await post({ event: 'transactions/deleted', transactionIds: ['t1', 't2'] })
-    expect(prismaMock.transaction.deleteMany).toHaveBeenCalledWith({
-      where: { pluggyTransactionId: { in: ['t1', 't2'] } },
+    expect(removeTransactionsMock).toHaveBeenCalledWith({
+      source: 'PLUGGY',
+      pluggyTransactionId: { in: ['t1', 't2'] },
     })
     expect(syncConnectionMock).not.toHaveBeenCalled()
   })
@@ -108,7 +113,7 @@ describe('processamento', () => {
     await post({ event: 'item/error', itemId })
     expect(prismaMock.connection.updateMany).toHaveBeenCalledWith({
       where: { pluggyItemId: itemId },
-      data: { status: 'LOGIN_ERROR', lastError: 'Credenciais inválidas' },
+      data: { status: 'LOGIN_ERROR', lastError: '001: Credenciais inválidas' },
     })
   })
 

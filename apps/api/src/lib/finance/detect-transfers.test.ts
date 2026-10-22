@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   detectTransferPairs,
   isBillPaymentDescription,
+  isCardPaymentCreditDescription,
   isWithdrawalDescription,
   type TransferCandidate,
 } from './detect-transfers'
@@ -19,6 +20,7 @@ function tx(
     accountId,
     date,
     amountCents,
+    accountType: accountId.startsWith('card') ? 'CREDIT' : accountId.startsWith('wallet') ? 'WALLET' : 'BANK',
     isTransfer: false,
     transferLocked: false,
     ...extra,
@@ -86,17 +88,67 @@ describe('detectTransferPairs', () => {
     expect(pairs).toEqual([['a1', 'b']])
   })
 
-  it('deixa de fora transferLocked e as já marcadas como transferência', () => {
+  it('deixa de fora transferLocked', () => {
     expect(
       detectTransferPairs([
         tx('a', 'bank-a', '2026-10-10', -50000, { transferLocked: true }),
         tx('b', 'bank-b', '2026-10-10', 50000),
       ]),
     ).toEqual([])
+  })
+
+  // Pagamento de fatura marcado sozinho numa sincronização ainda pareia
+  // quando o outro lado chega depois.
+  it('a já marcada como transferência, mas sem par e sem trava, ainda pareia', () => {
+    expect(
+      detectTransferPairs([
+        tx('a', 'bank-a', '2026-10-10', -50000, { isTransfer: true }),
+        tx('b', 'card-b', '2026-10-11', 50000),
+      ]),
+    ).toEqual([['a', 'b']])
+  })
+
+  it('pareia saída do banco com entrada no cartão (pagamento de fatura)', () => {
     expect(
       detectTransferPairs([
         tx('a', 'bank-a', '2026-10-10', -50000),
-        tx('b', 'bank-b', '2026-10-10', 50000, { isTransfer: true }),
+        tx('b', 'card-b', '2026-10-10', 50000),
+      ]),
+    ).toEqual([['a', 'b']])
+  })
+
+  it('nunca pareia compra no cartão (saída em CREDIT)', () => {
+    expect(
+      detectTransferPairs([
+        tx('a', 'card-a', '2026-10-10', -50000),
+        tx('b', 'bank-b', '2026-10-10', 50000),
+      ]),
+    ).toEqual([])
+    expect(
+      detectTransferPairs([
+        tx('a', 'card-a', '2026-10-10', -50000),
+        tx('b', 'card-b', '2026-10-10', 50000),
+      ]),
+    ).toEqual([])
+  })
+
+  it('nunca pareia a Carteira, de nenhum lado', () => {
+    expect(
+      detectTransferPairs([
+        tx('a', 'bank-a', '2026-10-10', -50000),
+        tx('b', 'wallet-1', '2026-10-10', 50000),
+      ]),
+    ).toEqual([])
+    expect(
+      detectTransferPairs([
+        tx('a', 'wallet-1', '2026-10-10', -50000),
+        tx('b', 'bank-b', '2026-10-10', 50000),
+      ]),
+    ).toEqual([])
+    expect(
+      detectTransferPairs([
+        tx('a', 'wallet-1', '2026-10-10', -50000),
+        tx('b', 'card-b', '2026-10-10', 50000),
       ]),
     ).toEqual([])
   })
@@ -108,6 +160,14 @@ describe('descrições', () => {
     expect(isBillPaymentDescription('Pagamento de fatura')).toBe(true)
     expect(isBillPaymentDescription('PAG FATURA')).toBe(true)
     expect(isBillPaymentDescription('Pix enviado Fulano')).toBe(false)
+  })
+
+  it('no cartão, a entrada de pagamento também vale sem a palavra fatura', () => {
+    expect(isCardPaymentCreditDescription('PAGAMENTO RECEBIDO')).toBe(true)
+    expect(isCardPaymentCreditDescription('Pagto efetuado')).toBe(true)
+    expect(isCardPaymentCreditDescription('Pagamento de fatura')).toBe(true)
+    expect(isCardPaymentCreditDescription('Estorno compra')).toBe(false)
+    expect(isCardPaymentCreditDescription('PAGUE MENOS')).toBe(false)
   })
 
   it('reconhece saque', () => {
