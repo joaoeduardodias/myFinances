@@ -1,0 +1,432 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { PluggyClient } from '@/lib/pluggy/client'
+import type {
+  PluggyAccount,
+  PluggyItem,
+  PluggyTransaction,
+} from '@/lib/pluggy/types'
+import { makePrismaMock, resetPrismaMocks } from '@/test/helpers'
+
+const prismaMock = makePrismaMock()
+
+vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
+
+const { syncConnection } = await import('./sync-connection')
+
+const USER = 'user-1'
+const TODAY = '2026-10-22'
+
+const connection = {
+  id: 'conn-1',
+  userId: USER,
+  pluggyItemId: 'item-1',
+  connectorName: 'Meu Pluggy',
+  status: 'UPDATING',
+  consentExpiresAt: null,
+  lastSyncedAt: null as Date | null,
+  lastError: null,
+}
+
+const item: PluggyItem = {
+  id: 'item-1',
+  status: 'UPDATED',
+  connector: { name: 'Meu Pluggy' },
+  consentExpiresAt: '2027-04-01T00:00:00.000Z',
+  error: null,
+}
+
+const bankAccount: PluggyAccount = {
+  id: 'p-acc-new',
+  type: 'BANK',
+  subtype: 'CHECKING_ACCOUNT',
+  name: 'Conta corrente',
+  number: '123',
+  balance: 1500.5,
+}
+
+function pluggyTx(extra: Partial<PluggyTransaction> = {}): PluggyTransaction {
+  return {
+    id: 'p-tx-1',
+    accountId: 'p-acc-new',
+    date: '2026-10-10T03:00:00.000Z',
+    description: 'IFOOD *RESTAURANTE',
+    amount: 42.9,
+    type: 'DEBIT',
+    status: 'POSTED',
+    category: 'Food delivery',
+    creditCardMetadata: null,
+    ...extra,
+  }
+}
+
+function makeClient(over: Partial<PluggyClient> = {}): PluggyClient {
+  return {
+    getItem: vi.fn(async () => item),
+    listAccounts: vi.fn(async () => [bankAccount]),
+    listTransactions: vi.fn(async () => [pluggyTx()]),
+    listBills: vi.fn(async () => []),
+    ...over,
+  }
+}
+
+type PairingRow = {
+  id: string
+  accountId: string
+  date: Date
+  description: string
+  amountCents: number
+  isTransfer: boolean
+  transferLocked: boolean
+  transferPairId: string | null
+  transferPairOf: { id: string } | null
+  account: { type: 'BANK' | 'CREDIT' | 'WALLET' }
+}
+
+let existingTxs: { pluggyTransactionId: string; userId: string; categoryLocked: boolean }[]
+let pairingRows: PairingRow[]
+
+beforeEach(() => {
+  resetPrismaMocks(prismaMock)
+  prismaMock.$transaction.mockImplementation((callback) => callback(prismaMock))
+  existingTxs = []
+  pairingRows = []
+
+  prismaMock.connection.findUnique.mockResolvedValue({ ...connection })
+  prismaMock.connection.update.mockResolvedValue({})
+  prismaMock.account.findMany.mockResolvedValue([])
+  prismaMock.account.upsert.mockImplementation(async ({ create }) => ({
+    id: `db-${create.pluggyAccountId}`,
+    ...create,
+  }))
+  prismaMock.account.findFirst.mockResolvedValue({ id: 'wallet-1', type: 'WALLET' })
+  prismaMock.account.update.mockResolvedValue({})
+  prismaMock.categoryRule.findMany.mockResolvedValue([])
+  prismaMock.transaction.findMany.mockImplementation(async ({ where }) =>
+    where.pluggyTransactionId ? existingTxs : pairingRows,
+  )
+  prismaMock.transaction.upsert.mockResolvedValue({})
+  prismaMock.transaction.update.mockResolvedValue({})
+  prismaMock.transaction.create.mockImplementation(async ({ data }) => ({
+    id: 'system-1',
+    ...data,
+  }))
+  prismaMock.transaction.aggregate.mockResolvedValue({ _sum: { amountCents: 0 } })
+  prismaMock.cardBill.upsert.mockResolvedValue({})
+})
+
+describe('syncConnection', () => {
+  it('atualiza o item e grava lastSyncedAt e lastError nulo no fim', async () => {
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    expect(prismaMock.connection.update).toHaveBeenCalledWith({
+      where: { id: 'conn-1' },
+      data: {
+        status: 'UPDATED',
+        connectorName: 'Meu Pluggy',
+        consentExpiresAt: new Date('2027-04-01T00:00:00.000Z'),
+        lastError: null,
+      },
+    })
+    const last = prismaMock.connection.update.mock.calls.at(-1)?.[0]
+    expect(last.data.lastSyncedAt).toBeInstanceOf(Date)
+    expect(last.data.lastError).toBeNull()
+  })
+
+  it('na primeira sincronização busca desde today − 365', async () => {
+    const client = makeClient()
+
+    await syncConnection('conn-1', { client, today: TODAY })
+
+    expect(client.listTransactions).toHaveBeenCalledWith('p-acc-new', '2025-10-22')
+  })
+
+  it('depois da primeira, busca desde lastSyncedAt − 30 dias', async () => {
+    prismaMock.connection.findUnique.mockResolvedValue({
+      ...connection,
+      lastSyncedAt: new Date('2026-10-20T15:00:00Z'),
+    })
+    const client = makeClient()
+
+    await syncConnection('conn-1', { client, today: TODAY })
+
+    expect(client.listTransactions).toHaveBeenCalledWith('p-acc-new', '2026-09-20')
+  })
+
+  it('faz upsert da conta com o saldo em centavos', async () => {
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    const call = prismaMock.account.upsert.mock.calls[0][0]
+    expect(call.where).toEqual({ pluggyAccountId: 'p-acc-new' })
+    expect(call.create).toMatchObject({
+      userId: USER,
+      connectionId: 'conn-1',
+      type: 'BANK',
+      name: 'Conta corrente',
+      balanceCents: 150050,
+    })
+    expect(call.update).toMatchObject({ connectionId: 'conn-1', balanceCents: 150050 })
+  })
+
+  it('preenche dueDay e closingDay do cartão só quando ainda estão nulos', async () => {
+    const card: PluggyAccount = {
+      id: 'p-card',
+      type: 'CREDIT',
+      subtype: 'CREDIT_CARD',
+      name: 'Cartão',
+      balance: 800,
+      creditData: { balanceDueDate: '2026-11-05' },
+    }
+    prismaMock.account.findMany.mockResolvedValue([
+      { id: 'db-p-card', pluggyAccountId: 'p-card', userId: USER, dueDay: 12, closingDay: null },
+    ])
+    const client = makeClient({ listAccounts: vi.fn(async () => [card]) })
+
+    await syncConnection('conn-1', { client, today: TODAY })
+
+    const call = prismaMock.account.upsert.mock.calls[0][0]
+    expect(call.create).toMatchObject({ dueDay: 5, closingDay: 29 })
+    expect(call.update).not.toHaveProperty('dueDay')
+    expect(call.update).toMatchObject({ closingDay: 29 })
+  })
+
+  it('faz upsert da transação com centavos, chave e categoria da Pluggy', async () => {
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    const call = prismaMock.transaction.upsert.mock.calls[0][0]
+    expect(call.where).toEqual({ pluggyTransactionId: 'p-tx-1', userId: USER })
+    expect(call.create).toMatchObject({
+      userId: USER,
+      accountId: 'db-p-acc-new',
+      pluggyTransactionId: 'p-tx-1',
+      date: new Date('2026-10-10T00:00:00Z'),
+      amountCents: -4290,
+      descriptionKey: 'ifood restaurante',
+      status: 'POSTED',
+      source: 'PLUGGY',
+      pluggyCategory: 'Food delivery',
+      category: 'Alimentação',
+    })
+  })
+
+  it('data com hora vale o dia no fuso do usuário; meia-noite UTC é a data civil', async () => {
+    const client = makeClient({
+      listTransactions: vi.fn(async () => [
+        pluggyTx({ id: 'late', date: '2026-10-11T01:30:00.000Z' }),
+        pluggyTx({ id: 'civil', date: '2026-10-11T00:00:00.000Z' }),
+      ]),
+    })
+
+    await syncConnection('conn-1', { client, today: TODAY })
+
+    const dates = prismaMock.transaction.upsert.mock.calls.map(([args]) => args.create.date)
+    expect(dates).toEqual([new Date('2026-10-10T00:00:00Z'), new Date('2026-10-11T00:00:00Z')])
+  })
+
+  it('não aplica regra para chave vazia', async () => {
+    prismaMock.categoryRule.findMany.mockResolvedValue([{ descriptionKey: '', category: 'Lazer' }])
+    const client = makeClient({
+      listTransactions: vi.fn(async () => [pluggyTx({ description: '123456', category: null })]),
+    })
+
+    await syncConnection('conn-1', { client, today: TODAY })
+
+    expect(prismaMock.transaction.upsert.mock.calls[0][0].create.category).toBeNull()
+  })
+
+  it('a regra do usuário vence a categoria da Pluggy', async () => {
+    prismaMock.categoryRule.findMany.mockResolvedValue([
+      { descriptionKey: 'ifood restaurante', category: 'Lazer' },
+    ])
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    const call = prismaMock.transaction.upsert.mock.calls[0][0]
+    expect(call.create.category).toBe('Lazer')
+    expect(call.update.category).toBe('Lazer')
+  })
+
+  it('o mesmo pluggyTransactionId numa conta nova (item renovado) faz update, não create', async () => {
+    existingTxs = [{ pluggyTransactionId: 'p-tx-1', userId: USER, categoryLocked: false }]
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    expect(prismaMock.transaction.upsert).toHaveBeenCalledTimes(1)
+    const call = prismaMock.transaction.upsert.mock.calls[0][0]
+    expect(call.where).toEqual({ pluggyTransactionId: 'p-tx-1', userId: USER })
+    expect(call.update).toMatchObject({ accountId: 'db-p-acc-new', amountCents: -4290 })
+    expect(prismaMock.transaction.create).not.toHaveBeenCalled()
+  })
+
+  it('não toca na transação que já é de outro usuário', async () => {
+    existingTxs = [{ pluggyTransactionId: 'p-tx-1', userId: 'other', categoryLocked: false }]
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    expect(prismaMock.transaction.upsert).not.toHaveBeenCalled()
+  })
+
+  it('categoria travada não é sobrescrita', async () => {
+    existingTxs = [{ pluggyTransactionId: 'p-tx-1', userId: USER, categoryLocked: true }]
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    const call = prismaMock.transaction.upsert.mock.calls[0][0]
+    expect(call.update).not.toHaveProperty('category')
+    expect(call.update.pluggyCategory).toBe('Food delivery')
+  })
+
+  it('faz upsert das faturas do cartão', async () => {
+    const card: PluggyAccount = {
+      id: 'p-card',
+      type: 'CREDIT',
+      subtype: 'CREDIT_CARD',
+      name: 'Cartão',
+      balance: 800,
+    }
+    const client = makeClient({
+      listAccounts: vi.fn(async () => [bankAccount, card]),
+      listBills: vi.fn(async () => [
+        {
+          id: 'bill-1',
+          dueDate: '2026-10-05T00:00:00.000Z',
+          totalAmount: 812.34,
+          payments: [{ amount: 500 }, { amount: 12.34 }],
+        },
+      ]),
+    })
+
+    await syncConnection('conn-1', { client, today: TODAY })
+
+    expect(client.listBills).toHaveBeenCalledTimes(1)
+    expect(client.listBills).toHaveBeenCalledWith('p-card')
+    const call = prismaMock.cardBill.upsert.mock.calls[0][0]
+    expect(call.where).toEqual({ pluggyBillId: 'bill-1', userId: USER })
+    expect(call.create).toMatchObject({
+      userId: USER,
+      accountId: 'db-p-card',
+      dueDate: new Date('2026-10-05T00:00:00Z'),
+      totalCents: 81234,
+      paidCents: 51234,
+    })
+  })
+
+  it('pareia transferências dos últimos 90 dias nos dois lados', async () => {
+    pairingRows = [
+      row({ id: 'out', accountId: 'acc-a', amountCents: -50000, description: 'PIX ENVIADO' }),
+      row({ id: 'in', accountId: 'acc-b', amountCents: 50000, description: 'PIX RECEBIDO' }),
+    ]
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    const pairingQuery = prismaMock.transaction.findMany.mock.calls.find(
+      ([args]) => !args.where.pluggyTransactionId,
+    )?.[0]
+    expect(pairingQuery.where).toMatchObject({
+      userId: USER,
+      date: { gte: new Date('2026-07-24T00:00:00Z') },
+    })
+    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+      where: { id: 'out' },
+      data: { isTransfer: true, transferPairId: 'in' },
+    })
+    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+      where: { id: 'in' },
+      data: { isTransfer: true, transferPairId: 'out' },
+    })
+  })
+
+  it('pagamento de fatura no banco sem par vira transferência sozinho', async () => {
+    pairingRows = [row({ id: 'bill-pay', amountCents: -80000, description: 'PAGTO FATURA NUBANK' })]
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+      where: { id: 'bill-pay' },
+      data: { isTransfer: true },
+    })
+  })
+
+  it('saque cria a transação SYSTEM na Carteira, pareada, e recalcula o saldo', async () => {
+    pairingRows = [row({ id: 'saque', amountCents: -20000, description: 'SAQUE 24H' })]
+    prismaMock.transaction.aggregate.mockResolvedValue({ _sum: { amountCents: 20000 } })
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    expect(prismaMock.transaction.create).toHaveBeenCalledTimes(1)
+    expect(prismaMock.transaction.create.mock.calls[0][0].data).toMatchObject({
+      userId: USER,
+      accountId: 'wallet-1',
+      date: new Date('2026-10-10T00:00:00Z'),
+      description: 'SAQUE 24H',
+      amountCents: 20000,
+      source: 'SYSTEM',
+      status: 'POSTED',
+      isTransfer: true,
+      transferPairId: 'saque',
+    })
+    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+      where: { id: 'saque' },
+      data: { isTransfer: true, transferPairId: 'system-1' },
+    })
+    expect(prismaMock.account.update).toHaveBeenCalledWith({
+      where: { id: 'wallet-1' },
+      data: { balanceCents: 20000 },
+    })
+  })
+
+  it('não cria crédito na Carteira de novo para um saque já pareado', async () => {
+    pairingRows = [
+      row({
+        id: 'saque',
+        amountCents: -20000,
+        description: 'SAQUE 24H',
+        isTransfer: true,
+        transferPairOf: { id: 'system-1' },
+      }),
+      // Par gravado mesmo sem `isTransfer`: também não gera outro crédito.
+      row({
+        id: 'saque-2',
+        amountCents: -20000,
+        description: 'SAQUE 24H',
+        transferPairOf: { id: 'system-2' },
+      }),
+    ]
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    expect(prismaMock.transaction.create).not.toHaveBeenCalled()
+    expect(prismaMock.transaction.update).not.toHaveBeenCalled()
+  })
+
+  it('erro da Pluggy grava lastError e relança', async () => {
+    const client = makeClient({
+      listTransactions: vi.fn(async () => {
+        throw new Error('Pluggy 500: boom')
+      }),
+    })
+
+    await expect(syncConnection('conn-1', { client, today: TODAY })).rejects.toThrow('boom')
+
+    expect(prismaMock.connection.update).toHaveBeenLastCalledWith({
+      where: { id: 'conn-1' },
+      data: { lastError: 'Pluggy 500: boom' },
+    })
+  })
+})
+
+function row(extra: Partial<PairingRow>): PairingRow {
+  return {
+    id: 'tx',
+    accountId: 'acc-a',
+    date: new Date('2026-10-10T00:00:00Z'),
+    description: 'x',
+    amountCents: -100,
+    isTransfer: false,
+    transferLocked: false,
+    transferPairId: null,
+    transferPairOf: null,
+    account: { type: 'BANK' },
+    ...extra,
+  }
+}

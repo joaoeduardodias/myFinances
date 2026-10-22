@@ -1,0 +1,292 @@
+import { env } from '@myfinances/env'
+
+import { addDays } from '@/lib/finance/business-days'
+import { mapPluggyCategory } from '@/lib/finance/categories'
+import { descriptionKey } from '@/lib/finance/description-key'
+import {
+  detectTransferPairs,
+  isBillPaymentDescription,
+  isWithdrawalDescription,
+} from '@/lib/finance/detect-transfers'
+import { toCents } from '@/lib/finance/money'
+import { pluggy, type PluggyClient } from '@/lib/pluggy/client'
+import type { PluggyAccount } from '@/lib/pluggy/types'
+import { prisma } from '@/lib/prisma'
+import { type IsoDate, todayIso } from '@/lib/today'
+
+import { ensureWalletAccount, recomputeWalletBalance } from './wallet'
+
+const FIRST_SYNC_DAYS = 365
+const RESYNC_OVERLAP_DAYS = 30
+const TRANSFER_WINDOW_DAYS = 90
+const CLOSING_DAYS_BEFORE_DUE = 7
+
+type SyncedAccount = { id: string; pluggyAccountId: string; type: 'BANK' | 'CREDIT' }
+
+function toDbDate(date: IsoDate): Date {
+  return new Date(`${date}T00:00:00Z`)
+}
+
+function toCentsAbs(value: number): number {
+  return Math.round(Math.abs(value) * 100)
+}
+
+/**
+ * Data civil de um campo de data da Pluggy. Meia-noite UTC é a data civil
+ * "pura" (cortar evita voltar um dia no fuso de São Paulo); com hora, é um
+ * instante e vale o dia no fuso do usuário.
+ */
+function pluggyDate(value: string): IsoDate {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value) || /T00:00:00(\.0+)?Z$/.test(value)) {
+    return value.slice(0, 10)
+  }
+  return todayIso(env.TIMEZONE, new Date(value))
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+export async function syncConnection(
+  connectionId: string,
+  opts: { client?: PluggyClient; today?: IsoDate } = {},
+): Promise<void> {
+  const client = opts.client ?? pluggy
+  const today = opts.today ?? todayIso()
+
+  const connection = await prisma.connection.findUnique({ where: { id: connectionId } })
+  if (!connection) throw new Error(`Conexão ${connectionId} não encontrada`)
+  const { userId } = connection
+
+  try {
+    const item = await client.getItem(connection.pluggyItemId)
+    await prisma.connection.update({
+      where: { id: connectionId },
+      data: {
+        status: item.status,
+        connectorName: item.connector.name,
+        consentExpiresAt: item.consentExpiresAt ? new Date(item.consentExpiresAt) : null,
+        lastError: item.error?.message ?? null,
+      },
+    })
+
+    const accounts = await syncAccounts(client, connection.pluggyItemId, connectionId, userId)
+
+    const dateFrom = connection.lastSyncedAt
+      ? addDays(todayIso(env.TIMEZONE, connection.lastSyncedAt), -RESYNC_OVERLAP_DAYS)
+      : addDays(today, -FIRST_SYNC_DAYS)
+    await syncTransactions(client, accounts, userId, dateFrom)
+    await syncBills(client, accounts, userId)
+    await pairTransfers(userId, today)
+
+    await prisma.connection.update({
+      where: { id: connectionId },
+      data: { lastSyncedAt: new Date(), lastError: item.error?.message ?? null },
+    })
+  } catch (error) {
+    await prisma.connection
+      .update({ where: { id: connectionId }, data: { lastError: errorMessage(error) } })
+      .catch(() => {})
+    throw error
+  }
+}
+
+async function syncAccounts(
+  client: PluggyClient,
+  itemId: string,
+  connectionId: string,
+  userId: string,
+): Promise<SyncedAccount[]> {
+  const remote = await client.listAccounts(itemId)
+  const existing = await prisma.account.findMany({
+    where: { pluggyAccountId: { in: remote.map((a) => a.id) } },
+    select: { pluggyAccountId: true, userId: true, dueDay: true, closingDay: true },
+  })
+  const existingById = new Map(existing.map((a) => [a.pluggyAccountId, a]))
+
+  const synced: SyncedAccount[] = []
+  for (const account of remote) {
+    const current = existingById.get(account.id)
+    // Uma conta da Pluggy pertence a um único usuário; nunca escrevemos na de outro.
+    if (current && current.userId !== userId) continue
+
+    const { dueDay, closingDay } = cardDays(account)
+    const fields = {
+      connectionId,
+      type: account.type,
+      name: account.name,
+      number: account.number ?? null,
+      balanceCents: Math.round(account.balance * 100),
+    }
+    const saved = await prisma.account.upsert({
+      where: { pluggyAccountId: account.id },
+      create: { ...fields, userId, pluggyAccountId: account.id, dueDay, closingDay },
+      update: {
+        ...fields,
+        // O usuário pode ter corrigido os dias do cartão: só preenchemos os vazios.
+        ...(current?.dueDay == null && dueDay != null ? { dueDay } : {}),
+        ...(current?.closingDay == null && closingDay != null ? { closingDay } : {}),
+      },
+    })
+    synced.push({ id: saved.id, pluggyAccountId: account.id, type: account.type })
+  }
+  return synced
+}
+
+function cardDays(account: PluggyAccount): { dueDay: number | null; closingDay: number | null } {
+  const due = account.type === 'CREDIT' ? account.creditData?.balanceDueDate : undefined
+  if (!due) return { dueDay: null, closingDay: null }
+  const dueDate = pluggyDate(due)
+  return {
+    dueDay: Number(dueDate.slice(8, 10)),
+    closingDay: Number(addDays(dueDate, -CLOSING_DAYS_BEFORE_DUE).slice(8, 10)),
+  }
+}
+
+async function syncTransactions(
+  client: PluggyClient,
+  accounts: SyncedAccount[],
+  userId: string,
+  dateFrom: IsoDate,
+) {
+  const rules = await prisma.categoryRule.findMany({
+    where: { userId },
+    select: { descriptionKey: true, category: true },
+  })
+  const ruleByKey = new Map(rules.map((r) => [r.descriptionKey, r.category]))
+
+  for (const account of accounts) {
+    const remote = await client.listTransactions(account.pluggyAccountId, dateFrom)
+    if (remote.length === 0) continue
+
+    // Ler antes para saber de quem é a linha e se a categoria está travada.
+    const existing = await prisma.transaction.findMany({
+      where: { pluggyTransactionId: { in: remote.map((t) => t.id) } },
+      select: { pluggyTransactionId: true, userId: true, categoryLocked: true },
+    })
+    const existingById = new Map(existing.map((t) => [t.pluggyTransactionId, t]))
+
+    for (const tx of remote) {
+      const current = existingById.get(tx.id)
+      if (current && current.userId !== userId) continue
+
+      const key = descriptionKey(tx.description)
+      // Chave vazia (descrição só de dígitos/prefixo) não casa com regra.
+      const category = (key && ruleByKey.get(key)) || mapPluggyCategory(tx.category)
+      const fields = {
+        // Um item renovado traz contas novas com as mesmas transações.
+        accountId: account.id,
+        date: toDbDate(pluggyDate(tx.date)),
+        description: tx.description,
+        descriptionKey: key,
+        amountCents: toCents(tx.amount, tx.type),
+        status: tx.status,
+        pluggyCategory: tx.category ?? null,
+        installmentNumber: tx.creditCardMetadata?.installmentNumber ?? null,
+        totalInstallments: tx.creditCardMetadata?.totalInstallments ?? null,
+      }
+      await prisma.transaction.upsert({
+        where: { pluggyTransactionId: tx.id, userId },
+        create: { ...fields, userId, pluggyTransactionId: tx.id, source: 'PLUGGY', category },
+        update: { ...fields, ...(current?.categoryLocked ? {} : { category }) },
+      })
+    }
+  }
+}
+
+async function syncBills(client: PluggyClient, accounts: SyncedAccount[], userId: string) {
+  for (const account of accounts) {
+    if (account.type !== 'CREDIT') continue
+    const bills = await client.listBills(account.pluggyAccountId)
+    for (const bill of bills) {
+      const fields = {
+        accountId: account.id,
+        dueDate: toDbDate(pluggyDate(bill.dueDate)),
+        totalCents: Math.round(bill.totalAmount * 100),
+        paidCents: (bill.payments ?? []).reduce((sum, p) => sum + toCentsAbs(p.amount), 0),
+      }
+      await prisma.cardBill.upsert({
+        where: { pluggyBillId: bill.id, userId },
+        create: { ...fields, userId, pluggyBillId: bill.id },
+        update: fields,
+      })
+    }
+  }
+}
+
+async function pairTransfers(userId: string, today: IsoDate) {
+  const rows = await prisma.transaction.findMany({
+    where: { userId, date: { gte: toDbDate(addDays(today, -TRANSFER_WINDOW_DAYS)) } },
+    select: {
+      id: true,
+      accountId: true,
+      date: true,
+      description: true,
+      amountCents: true,
+      isTransfer: true,
+      transferLocked: true,
+      transferPairId: true,
+      transferPairOf: { select: { id: true } },
+      account: { select: { type: true } },
+    },
+  })
+  // Quem já tem par fica de fora mesmo sem `isTransfer`: `transferPairId` é único.
+  const txs = rows
+    .filter((r) => !r.transferPairId && !r.transferPairOf)
+    .map((r) => ({ ...r, date: r.date.toISOString().slice(0, 10) }))
+
+  const paired = new Set<string>()
+  for (const [outId, inId] of detectTransferPairs(txs)) {
+    paired.add(outId)
+    paired.add(inId)
+    await prisma.$transaction(async (db) => {
+      await db.transaction.update({
+        where: { id: outId },
+        data: { isTransfer: true, transferPairId: inId },
+      })
+      await db.transaction.update({
+        where: { id: inId },
+        data: { isTransfer: true, transferPairId: outId },
+      })
+    })
+  }
+
+  let walletId: string | null = null
+  for (const tx of txs) {
+    if (paired.has(tx.id) || tx.isTransfer || tx.transferLocked || tx.amountCents >= 0) continue
+
+    if (tx.account.type === 'BANK' && isBillPaymentDescription(tx.description)) {
+      await prisma.transaction.update({ where: { id: tx.id }, data: { isTransfer: true } })
+      continue
+    }
+
+    if (tx.account.type !== 'WALLET' && isWithdrawalDescription(tx.description)) {
+      walletId ??= (await ensureWalletAccount(userId)).id
+      const wallet = walletId
+      // O par (transferPairId nos dois lados) é o que torna isto idempotente:
+      // na próxima sincronização o saque já é transferência e fica de fora.
+      await prisma.$transaction(async (db) => {
+        const credit = await db.transaction.create({
+          data: {
+            userId,
+            accountId: wallet,
+            date: toDbDate(tx.date),
+            description: tx.description,
+            descriptionKey: descriptionKey(tx.description),
+            amountCents: Math.abs(tx.amountCents),
+            status: 'POSTED',
+            source: 'SYSTEM',
+            isTransfer: true,
+            transferPairId: tx.id,
+          },
+        })
+        await db.transaction.update({
+          where: { id: tx.id },
+          data: { isTransfer: true, transferPairId: credit.id },
+        })
+      })
+    }
+  }
+
+  if (walletId) await recomputeWalletBalance(walletId)
+}

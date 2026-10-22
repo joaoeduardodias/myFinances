@@ -92,6 +92,11 @@ export function makePrismaMock() {
   const prisma = {
     user: model(),
     userSession: model(),
+    connection: model(),
+    account: model(),
+    transaction: model(),
+    cardBill: model(),
+    categoryRule: model(),
     $transaction: vi.fn((callback) => callback(prisma)),
     $queryRaw: vi.fn(),
     $executeRaw: vi.fn(),
