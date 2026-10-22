@@ -9,13 +9,20 @@ datasource db {
 }
 
 model User {
-  id           String        @id @default(uuid())
-  name         String
-  email        String        @unique
-  passwordHash String        @map("password_hash")
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
-  sessions     UserSession[]
+  id            String         @id @default(uuid())
+  name          String
+  email         String         @unique
+  passwordHash  String         @map("password_hash")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  sessions      UserSession[]
+  connections   Connection[]
+  accounts      Account[]
+  transactions  Transaction[]
+  cardBills     CardBill[]
+  categoryRules CategoryRule[]
+  recurrences   Recurrence[]
+  payslips      Payslip[]
 
   @@map("users")
 }
@@ -35,4 +42,208 @@ model UserSession {
 
   @@index([userId])
   @@map("user_sessions")
+}
+
+enum AccountType {
+  BANK
+  CREDIT
+  WALLET
+}
+
+enum TransactionStatus {
+  PENDING
+  POSTED
+}
+
+enum TransactionSource {
+  PLUGGY
+  MANUAL
+  SYSTEM
+}
+
+enum RecurrenceDirection {
+  IN
+  OUT
+}
+
+enum DayRule {
+  DAY_OF_MONTH
+  NTH_BUSINESS_DAY
+}
+
+enum NonBusinessDayPolicy {
+  ANTICIPATE
+  POSTPONE
+  KEEP
+}
+
+enum RecurrenceStatus {
+  SUGGESTED
+  CONFIRMED
+  DISMISSED
+}
+
+enum PayslipType {
+  MONTHLY
+  ADVANCE
+  THIRTEENTH
+  VACATION
+}
+
+enum PayslipStatus {
+  UNRECOGNIZED
+  RECOGNIZED
+  MANUAL
+}
+
+enum PayslipLineKind {
+  EARNING
+  DEDUCTION
+}
+
+model Connection {
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pluggyItemId     String    @unique @map("pluggy_item_id")
+  connectorName    String    @map("connector_name")
+  status           String
+  consentExpiresAt DateTime? @map("consent_expires_at")
+  lastSyncedAt     DateTime? @map("last_synced_at")
+  lastError        String?   @map("last_error")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  accounts         Account[]
+
+  @@index([userId])
+  @@map("connections")
+}
+
+model Account {
+  id              String        @id @default(uuid())
+  userId          String        @map("user_id")
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectionId    String?       @map("connection_id")
+  connection      Connection?   @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  pluggyAccountId String?       @unique @map("pluggy_account_id")
+  type            AccountType
+  name            String
+  number          String?
+  balanceCents    Int           @map("balance_cents")
+  closingDay      Int?          @map("closing_day")
+  dueDay          Int?          @map("due_day")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  transactions    Transaction[]
+  cardBills       CardBill[]
+  recurrences     Recurrence[]
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Transaction {
+  id                  String            @id @default(uuid())
+  userId              String            @map("user_id")
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId           String            @map("account_id")
+  account             Account           @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  pluggyTransactionId String?           @unique @map("pluggy_transaction_id")
+  date                DateTime          @db.Date
+  description         String
+  descriptionKey      String            @map("description_key")
+  amountCents         Int               @map("amount_cents")
+  status              TransactionStatus
+  source              TransactionSource
+  pluggyCategory      String?           @map("pluggy_category")
+  category            String?
+  categoryLocked      Boolean           @default(false) @map("category_locked")
+  isTransfer          Boolean           @default(false) @map("is_transfer")
+  transferLocked      Boolean           @default(false) @map("transfer_locked")
+  transferPairId      String?           @unique @map("transfer_pair_id")
+  transferPair        Transaction?      @relation("TransferPair", fields: [transferPairId], references: [id], onDelete: SetNull)
+  transferPairOf      Transaction?      @relation("TransferPair")
+  installmentNumber   Int?              @map("installment_number")
+  totalInstallments   Int?              @map("total_installments")
+  createdAt           DateTime          @default(now()) @map("created_at")
+
+  @@index([userId, date])
+  @@map("transactions")
+}
+
+model CardBill {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId    String   @map("account_id")
+  account      Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  pluggyBillId String   @unique @map("pluggy_bill_id")
+  dueDate      DateTime @map("due_date") @db.Date
+  totalCents   Int      @map("total_cents")
+  paidCents    Int      @map("paid_cents")
+
+  @@index([userId])
+  @@map("card_bills")
+}
+
+model CategoryRule {
+  id             String @id @default(uuid())
+  userId         String @map("user_id")
+  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  descriptionKey String @map("description_key")
+  category       String
+
+  @@unique([userId, descriptionKey])
+  @@map("category_rules")
+}
+
+model Recurrence {
+  id                   String               @id @default(uuid())
+  userId               String               @map("user_id")
+  user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId            String               @map("account_id")
+  account              Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  description          String
+  descriptionKey       String               @map("description_key")
+  direction            RecurrenceDirection
+  expectedAmountCents  Int                  @map("expected_amount_cents")
+  dayRule              DayRule              @map("day_rule")
+  dayValue             Int                  @map("day_value")
+  nonBusinessDayPolicy NonBusinessDayPolicy @default(ANTICIPATE) @map("non_business_day_policy")
+  status               RecurrenceStatus
+  createdAt            DateTime             @default(now()) @map("created_at")
+
+  @@unique([userId, accountId, descriptionKey, direction])
+  @@map("recurrences")
+}
+
+model Payslip {
+  id         String        @id @default(uuid())
+  userId     String        @map("user_id")
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// YYYY-MM
+  competence String
+  type       PayslipType
+  status     PayslipStatus
+  grossCents Int?          @map("gross_cents")
+  netCents   Int?          @map("net_cents")
+  fileKey    String        @map("file_key")
+  fileName   String        @map("file_name")
+  fileSha256 String        @map("file_sha256")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  lines      PayslipLine[]
+
+  @@unique([userId, fileSha256])
+  @@map("payslips")
+}
+
+model PayslipLine {
+  id          String          @id @default(uuid())
+  payslipId   String          @map("payslip_id")
+  payslip     Payslip         @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+  kind        PayslipLineKind
+  description String
+  reference   String?
+  amountCents Int             @map("amount_cents")
+  position    Int
+
+  @@map("payslip_lines")
 }
