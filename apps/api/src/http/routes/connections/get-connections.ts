@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { auth } from '@/http/middlewares/auth'
 import { prisma } from '@/lib/prisma'
 
-import { connectionSchema, connectionSelect } from './connection-schema'
+import { connectionSchema, connectionSelect, serializeConnection } from './connection-schema'
 
 export async function getConnections(app: FastifyInstance) {
   app
@@ -29,7 +29,7 @@ export async function getConnections(app: FastifyInstance) {
           where: { userId },
           orderBy: { createdAt: 'asc' },
         })
-        return reply.send({ connections })
+        return reply.send({ connections: connections.map(serializeConnection) })
       },
     )
 }

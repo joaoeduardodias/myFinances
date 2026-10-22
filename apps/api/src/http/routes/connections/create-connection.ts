@@ -9,7 +9,7 @@ import { syncConnection } from '@/services/sync-connection'
 
 import { BadRequestError } from '../_errors/bad-request-error'
 import { ConflictError } from '../_errors/conflict-error'
-import { connectionSchema, connectionSelect } from './connection-schema'
+import { connectionSchema, connectionSelect, serializeConnection } from './connection-schema'
 
 export async function createConnection(app: FastifyInstance) {
   app
@@ -62,7 +62,7 @@ export async function createConnection(app: FastifyInstance) {
           select: connectionSelect,
           where: { id: created.id },
         })
-        return reply.status(201).send({ connection })
+        return reply.status(201).send({ connection: serializeConnection(connection) })
       },
     )
 }

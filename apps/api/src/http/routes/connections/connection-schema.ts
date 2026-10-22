@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { friendlyConnectionError } from '@/lib/pluggy/connection-error'
+
 export const connectionSelect = {
   id: true,
   connectorName: true,
@@ -17,3 +19,8 @@ export const connectionSchema = z.object({
   lastSyncedAt: z.date().nullable(),
   lastError: z.string().nullable(),
 })
+
+/** O `lastError` do banco é o texto cru da Pluggy; quem lê a API vê a frase em português. */
+export function serializeConnection<T extends { lastError: string | null }>(row: T): T {
+  return { ...row, lastError: friendlyConnectionError(row.lastError) }
+}

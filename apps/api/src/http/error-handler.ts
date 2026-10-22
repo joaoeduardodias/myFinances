@@ -8,6 +8,7 @@ import { z, ZodError } from 'zod'
 import { databaseReason } from '@/lib/database-reason'
 import { Prisma } from '@/prisma/generated/client'
 
+import { BadGatewayError } from './routes/_errors/bad-gateway-error'
 import { BadRequestError } from './routes/_errors/bad-request-error'
 import { ConflictError } from './routes/_errors/conflict-error'
 import { NotFoundError } from './routes/_errors/not-found-error'
@@ -234,6 +235,9 @@ export function errorHandler(
   }
   if (error instanceof NotFoundError) {
     return reply.status(404).send({ message: error.message })
+  }
+  if (error instanceof BadGatewayError) {
+    return reply.status(502).send({ message: error.message })
   }
 
   // Um código por requisição, o mesmo na tela e no log.

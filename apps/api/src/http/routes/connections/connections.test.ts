@@ -25,7 +25,7 @@ vi.mock('@/services/wallet', () => ({
   ensureWalletAccount: ensureWalletAccountMock,
 }))
 
-const { PluggyNotFoundError } = await import('@/lib/pluggy/client')
+const { PluggyError, PluggyNotFoundError } = await import('@/lib/pluggy/client')
 const { createConnection } = await import('./create-connection')
 const { getConnections } = await import('./get-connections')
 const { deleteConnection } = await import('./delete-connection')
@@ -140,7 +140,7 @@ describe('POST /connections', () => {
     getItem.mockResolvedValue({ id: itemId, connector: { name: 'Nubank' }, status: 'UPDATED' })
     prismaMock.connection.findUnique.mockResolvedValue(null)
     prismaMock.connection.create.mockResolvedValue(row)
-    prismaMock.connection.findUniqueOrThrow.mockResolvedValue({ ...row, lastError: 'falhou' })
+    prismaMock.connection.findUniqueOrThrow.mockResolvedValue({ ...row, lastError: 'Pluggy 500 em /x: falhou' })
     syncConnectionMock.mockRejectedValue(new Error('falhou'))
 
     const response = await call(createConnection, {
@@ -150,7 +150,9 @@ describe('POST /connections', () => {
     })
 
     expect(response.statusCode).toBe(201)
-    expect(response.json().connection.lastError).toBe('falhou')
+    expect(response.json().connection.lastError).toBe(
+      'Falha ao falar com a Pluggy. Tente de novo mais tarde.',
+    )
   })
 
   it('rejeita itemId que não é uuid', async () => {
@@ -164,6 +166,32 @@ describe('POST /connections', () => {
 })
 
 describe('GET /connections', () => {
+  it('traduz o lastError cru da Pluggy para português', async () => {
+    const base = {
+      connectorName: 'Nubank',
+      status: 'LOGIN_ERROR',
+      consentExpiresAt: null,
+      lastSyncedAt: null,
+    }
+    prismaMock.connection.findMany.mockResolvedValue([
+      { ...base, id: uuid('c1'), lastError: 'USER_AUTHORIZATION_EXPIRED: Consent expired' },
+      { ...base, id: uuid('c2'), lastError: 'LOGIN_ERROR: Invalid credentials' },
+      { ...base, id: uuid('c3'), lastError: 'Pluggy 403 em /items/x: Forbidden' },
+      { ...base, id: uuid('c4'), lastError: 'Pluggy 500 em /accounts: Internal error' },
+      { ...base, id: uuid('c5'), lastError: null },
+    ])
+
+    const response = await call(getConnections, { method: 'GET', url: '/connections' })
+
+    expect(response.json().connections.map((c: { lastError: string | null }) => c.lastError)).toEqual([
+      'A Pluggy recusou o acesso — reautorize no Meu Pluggy.',
+      'A Pluggy recusou o acesso — reautorize no Meu Pluggy.',
+      'A Pluggy recusou o acesso — reautorize no Meu Pluggy.',
+      'Falha ao falar com a Pluggy. Tente de novo mais tarde.',
+      null,
+    ])
+  })
+
   it('lista só as conexões do usuário', async () => {
     const row = {
       id: connId,
@@ -221,6 +249,32 @@ describe('POST /connections/:id/sync', () => {
     })
     expect(response.statusCode).toBe(204)
     expect(syncConnectionMock).toHaveBeenCalledWith(connId)
+  })
+
+  it('falha da Pluggy vira 502 com a mensagem em português', async () => {
+    prismaMock.connection.findFirst.mockResolvedValue({ id: connId })
+    syncConnectionMock.mockRejectedValue(new PluggyError('Pluggy 500 em /accounts: boom', 500))
+
+    const response = await call(syncConnectionRoute, {
+      method: 'POST',
+      url: `/connections/${connId}/sync`,
+    })
+
+    expect(response.statusCode).toBe(502)
+    expect(response.json().message).toBe('Falha ao falar com a Pluggy. Tente de novo mais tarde.')
+  })
+
+  it('autorização vencida vira 502 pedindo para reautorizar', async () => {
+    prismaMock.connection.findFirst.mockResolvedValue({ id: connId })
+    syncConnectionMock.mockRejectedValue(new PluggyError('Pluggy 401 em /items/x: Unauthorized', 401))
+
+    const response = await call(syncConnectionRoute, {
+      method: 'POST',
+      url: `/connections/${connId}/sync`,
+    })
+
+    expect(response.statusCode).toBe(502)
+    expect(response.json().message).toBe('A Pluggy recusou o acesso — reautorize no Meu Pluggy.')
   })
 
   it('responde 404 para conexão de outro usuário, sem sincronizar', async () => {

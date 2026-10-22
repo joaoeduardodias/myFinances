@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { Prisma } from '@/prisma/generated/client'
 import { buildTestApp } from '@/test/helpers'
 
+import { BadGatewayError } from './routes/_errors/bad-gateway-error'
 import { NotFoundError } from './routes/_errors/not-found-error'
 
 /** Route that throws whatever the test hands it, to exercise the handler. */
@@ -29,6 +30,13 @@ describe('error handler — erros da aplicação', () => {
 
     expect(statusCode).toBe(404)
     expect(body.message).toBe('x')
+  })
+
+  it('BadGatewayError vira 502', async () => {
+    const { statusCode, body } = await requestBoom(new BadGatewayError('Pluggy fora'))
+
+    expect(statusCode).toBe(502)
+    expect(body.message).toBe('Pluggy fora')
   })
 })
 
