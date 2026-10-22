@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
-import { detectAndStoreRecurrences } from '@/services/detect-and-store-recurrences'
-import { prisma } from '@/lib/prisma'
 import { toDbDate } from '@/lib/db-date'
+import { prisma } from '@/lib/prisma'
+import { detectAndStoreRecurrences } from '@/services/detect-and-store-recurrences'
 import { authHeaders, buildTestApp, signToken } from '@/test/helpers'
 
 import { getAccounts } from './accounts/get-accounts'
