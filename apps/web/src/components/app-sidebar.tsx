@@ -10,6 +10,7 @@ import {
 import { NavLink, useMatch } from 'react-router-dom'
 
 import { useAuth } from '@/auth/auth-context'
+import { Logo } from '@/components/logo'
 import {
   Sidebar,
   SidebarContent,
@@ -54,7 +55,10 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" role="navigation" aria-label="Navegação">
       <SidebarHeader>
-        <span className="px-2 text-lg font-semibold">myFinances</span>
+        <Logo
+          className="px-1 text-lg"
+          nameClassName="group-data-[collapsible=icon]:hidden"
+        />
       </SidebarHeader>
 
       <SidebarContent>

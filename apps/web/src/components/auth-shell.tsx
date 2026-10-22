@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { Logo } from '@/components/logo'
 import { ThemeToggle } from '@/components/theme-toggle'
 import {
   Card,
@@ -22,7 +23,7 @@ export function AuthShell({ title, description, children }: AuthShellProps) {
         <ThemeToggle />
       </div>
       <div className="w-full max-w-sm">
-        <p className="mb-8 text-center text-2xl font-semibold">myFinances</p>
+        <Logo className="mb-8 justify-center text-2xl" />
         <Card>
           <CardHeader className="pb-4">
             <CardTitle className="text-2xl">{title}</CardTitle>
