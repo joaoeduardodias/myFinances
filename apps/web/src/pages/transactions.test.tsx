@@ -158,6 +158,9 @@ describe('Transactions', () => {
     await screen.findByText('Pix')
     expect(screen.getAllByRole('button', { name: /^Excluir/ })).toHaveLength(1)
     await user.click(screen.getByRole('button', { name: 'Excluir: Pix' }))
+    expect(deleteTransaction).not.toHaveBeenCalled()
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Excluir' }))
     await waitFor(() => expect(deleteTransaction).toHaveBeenCalledWith('t2'))
   })
 

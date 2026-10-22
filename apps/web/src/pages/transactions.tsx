@@ -5,11 +5,22 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { ManualTransactionDialog } from '@/components/manual-transaction-dialog'
 import { NativeSelect } from '@/components/native-select'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,7 +53,7 @@ const KINDS: { value: TransactionKind; label: string }[] = [
   { value: 'transfer', label: 'Transferências' },
 ]
 
-const incomeClass = 'text-emerald-600 dark:text-emerald-400'
+const incomeClass = 'text-income'
 
 function amountClass(t: Transaction) {
   return t.amountCents < 0 ? 'text-destructive' : incomeClass
@@ -51,13 +62,14 @@ function amountClass(t: Transaction) {
 export function Transactions() {
   const queryClient = useQueryClient()
   const [params, setParams] = useSearchParams()
+  const [toDelete, setToDelete] = useState<Transaction | null>(null)
 
   const month = currentMonthRange()
   const from = params.get('from') || month.from
   const to = params.get('to') || month.to
   const accountId = params.get('accountId') || undefined
   const category = params.get('category') || undefined
-  const kind = (params.get('kind') as TransactionKind | null) || undefined
+  const kind = KINDS.find((k) => k.value === params.get('kind'))?.value
   const page = Math.max(1, Number(params.get('page')) || 1)
 
   function setFilter(key: string, value: string) {
@@ -306,7 +318,7 @@ export function Transactions() {
                             variant="ghost"
                             size="icon"
                             aria-label={`Excluir: ${t.description}`}
-                            onClick={() => remove.mutate(t.id)}
+                            onClick={() => setToDelete(t)}
                           >
                             <Trash2 aria-hidden />
                           </Button>
@@ -345,6 +357,27 @@ export function Transactions() {
           </nav>
         </>
       )}
+      <AlertDialog
+        open={toDelete !== null}
+        onOpenChange={(open) => !open && setToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir lançamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {`"${toDelete?.description ?? ''}" será removido. Esta ação não pode ser desfeita.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => toDelete && remove.mutate(toDelete.id)}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

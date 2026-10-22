@@ -132,7 +132,9 @@ export function ManualTransactionDialog() {
             <Label htmlFor="manual-date">Data</Label>
             <Input id="manual-date" type="date" {...register('date')} />
             {errors.date && (
-              <p className="text-destructive text-sm">{errors.date.message}</p>
+              <p role="alert" className="text-destructive text-sm">
+                {errors.date.message}
+              </p>
             )}
           </div>
 
@@ -140,7 +142,7 @@ export function ManualTransactionDialog() {
             <Label htmlFor="manual-description">Descrição</Label>
             <Input id="manual-description" {...register('description')} />
             {errors.description && (
-              <p className="text-destructive text-sm">
+              <p role="alert" className="text-destructive text-sm">
                 {errors.description.message}
               </p>
             )}
@@ -155,7 +157,7 @@ export function ManualTransactionDialog() {
               {...register('amount')}
             />
             {errors.amount && (
-              <p className="text-destructive text-sm">
+              <p role="alert" className="text-destructive text-sm">
                 {errors.amount.message}
               </p>
             )}
