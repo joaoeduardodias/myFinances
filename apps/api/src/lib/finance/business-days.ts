@@ -70,6 +70,16 @@ export function isBusinessDay(date: IsoDate): boolean {
   return !bankHolidays(Number(date.slice(0, 4))).has(date)
 }
 
+/** Quantos dias úteis o mês tem. `month` de 1 a 12. */
+export function businessDayCount(year: number, month: number): number {
+  const prefix = `${year}-${String(month).padStart(2, '0')}`
+  let count = 0
+  for (let date: IsoDate = `${prefix}-01`; date.startsWith(prefix); date = addDays(date, 1)) {
+    if (isBusinessDay(date)) count += 1
+  }
+  return count
+}
+
 /**
  * `month` de 1 a 12. Lança `RangeError` se o mês não tiver `n` dias úteis
  * (`n` vem do usuário em `Recurrence.dayValue`).

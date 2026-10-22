@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   adjustToBusinessDay,
   bankHolidays,
+  businessDayCount,
   isBusinessDay,
   nthBusinessDay,
 } from './business-days'
@@ -48,6 +49,13 @@ describe('nthBusinessDay', () => {
     expect(() => nthBusinessDay(2026, 10, 0)).toThrow(RangeError)
     expect(() => nthBusinessDay(2026, 10, 22)).toThrow(RangeError)
     expect(() => nthBusinessDay(2026, 10, 1.5)).toThrow(RangeError)
+  })
+})
+
+describe('businessDayCount', () => {
+  it('conta os dias úteis do mês, sem fins de semana e feriados', () => {
+    expect(businessDayCount(2026, 2)).toBe(18) // Carnaval em 16 e 17
+    expect(businessDayCount(2026, 10)).toBe(21) // 12/10 feriado
   })
 })
 

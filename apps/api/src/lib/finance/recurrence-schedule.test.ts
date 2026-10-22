@@ -18,6 +18,12 @@ describe('expectedDates', () => {
     expect(expectedDates(salary, '2026-10-22', '2026-12-31')).toEqual(['2026-11-09', '2026-12-07'])
   })
 
+  it('limita o n-ésimo dia útil ao último dia útil do mês', () => {
+    // Fevereiro de 2026 tem 18 dias úteis (Carnaval em 16 e 17); o último é 27.
+    const rule = { dayRule: 'NTH_BUSINESS_DAY', dayValue: 23, nonBusinessDayPolicy: 'ANTICIPATE' } as const
+    expect(expectedDates(rule, '2026-02-01', '2026-02-28')).toEqual(['2026-02-27'])
+  })
+
   it('só devolve datas dentro de [from, to]', () => {
     const rule = { dayRule: 'DAY_OF_MONTH', dayValue: 10, nonBusinessDayPolicy: 'KEEP' } as const
     expect(expectedDates(rule, '2026-01-11', '2026-03-09')).toEqual(['2026-02-10'])

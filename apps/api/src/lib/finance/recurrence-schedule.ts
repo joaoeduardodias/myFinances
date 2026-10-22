@@ -2,6 +2,7 @@ import type { IsoDate } from '@/lib/today'
 
 import {
   adjustToBusinessDay,
+  businessDayCount,
   type NonBusinessDayPolicy,
   nthBusinessDay,
 } from './business-days'
@@ -13,9 +14,11 @@ export type RecurrenceRule = {
 }
 
 function dateInMonth(rule: RecurrenceRule, year: number, month: number): IsoDate {
-  // NTH_BUSINESS_DAY já cai em dia útil, então a política não se aplica.
+  // NTH_BUSINESS_DAY já cai em dia útil, então a política não se aplica. Mês
+  // com menos dias úteis que `dayValue` usa o último, como o DAY_OF_MONTH.
   if (rule.dayRule === 'NTH_BUSINESS_DAY') {
-    return nthBusinessDay(year, month, rule.dayValue)
+    const n = Math.min(rule.dayValue, businessDayCount(year, month))
+    return nthBusinessDay(year, month, n)
   }
   const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
   const day = Math.min(rule.dayValue, lastDay)
