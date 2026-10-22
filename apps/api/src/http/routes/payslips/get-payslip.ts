@@ -31,7 +31,8 @@ async function findDeposit(
   userId: string,
   payslip: { competence: string; type: Parameters<typeof reconciliationWindow>[1]; netCents: number | null },
 ) {
-  if (payslip.netCents === null) return null
+  // Sem líquido positivo não há depósito a procurar.
+  if (payslip.netCents === null || payslip.netCents <= 0) return null
   const { from, to, target } = reconciliationWindow(payslip.competence, payslip.type)
 
   const candidates = await prisma.transaction.findMany({
@@ -45,6 +46,8 @@ async function findDeposit(
         lte: payslip.netCents + RECONCILIATION_TOLERANCE_CENTS,
       },
       date: { gte: toDbDate(from), lte: toDbDate(to) },
+      // Salário cai em conta ou é sacado; entrada no cartão é estorno.
+      account: { type: { in: ['BANK', 'WALLET'] } },
     },
   })
 
