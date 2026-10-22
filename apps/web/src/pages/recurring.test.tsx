@@ -37,19 +37,25 @@ const rec = (over: Partial<Recurrence> = {}): Recurrence => ({
   ...over,
 })
 
+function account(id: string, type: 'BANK' | 'CREDIT' | 'WALLET', name: string) {
+  return {
+    id,
+    type,
+    name,
+    number: null,
+    balanceCents: 0,
+    closingDay: null,
+    dueDay: null,
+    connectorName: null,
+  }
+}
+
 function renderPage(recurrences: Recurrence[] = [rec()]) {
   vi.mocked(listRecurrences).mockResolvedValue(recurrences)
   vi.mocked(listAccounts).mockResolvedValue([
-    {
-      id: 'a1',
-      type: 'BANK',
-      name: 'Nubank',
-      number: null,
-      balanceCents: 0,
-      closingDay: null,
-      dueDay: null,
-      connectorName: null,
-    },
+    account('a1', 'BANK', 'Nubank'),
+    account('card', 'CREDIT', 'Cartão Nubank'),
+    account('w', 'WALLET', 'Carteira'),
   ])
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -144,6 +150,24 @@ describe('Recurring', () => {
         dayValue: 5,
         nonBusinessDayPolicy: 'ANTICIPATE',
       }),
+    )
+  })
+
+  // A projeção ignora recorrente no cartão: oferecer o cartão criaria uma
+  // recorrente que nunca aparece em "a pagar".
+  it('offers only bank accounts and the wallet', async () => {
+    const user = userEvent.setup()
+    renderPage([])
+    await user.click(
+      await screen.findByRole('button', { name: 'Novo recorrente' }),
+    )
+    const select = await screen.findByLabelText('Conta')
+    await waitFor(() =>
+      expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
+        'Selecione',
+        'Nubank',
+        'Carteira',
+      ]),
     )
   })
 

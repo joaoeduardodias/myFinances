@@ -167,11 +167,14 @@ function RecurrenceFormBody({
             <Label htmlFor="rec-account">Conta</Label>
             <NativeSelect id="rec-account" {...register('accountId')}>
               <option value="">Selecione</option>
-              {accounts.data?.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
+              {/* A projeção ignora recorrente no cartão. */}
+              {accounts.data
+                ?.filter((a) => a.type === 'BANK' || a.type === 'WALLET')
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
             </NativeSelect>
             {errors.accountId && (
               <p role="alert" className="text-destructive text-sm">
