@@ -1,6 +1,7 @@
 import type { IsoDate } from '@/lib/types'
 
 import { api } from './api'
+import { PLUGGY_SYNC_TIMEOUT_MS } from './connections'
 
 export interface Payable {
   kind: 'BILL' | 'RECURRENCE'
@@ -35,6 +36,6 @@ export function getDashboard() {
 
 export function syncAll(force = false) {
   return api
-    .post('sync', { searchParams: { force } })
+    .post('sync', { searchParams: { force }, timeout: PLUGGY_SYNC_TIMEOUT_MS })
     .json<{ synced: number }>()
 }

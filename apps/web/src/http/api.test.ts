@@ -125,6 +125,47 @@ describe('api — silent refresh on 401', () => {
     expect(endSessionMock).toHaveBeenCalled()
   })
 
+  it('ends the session when the refresh answers 400', async () => {
+    vi.mocked(getToken).mockReturnValue('expired-token')
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(401, {}))
+      .mockResolvedValueOnce(jsonResponse(400, {}))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { api } = await import('./api')
+    await expect(api.get('transactions').json()).rejects.toThrow()
+    expect(endSessionMock).toHaveBeenCalled()
+  })
+
+  // Sem rede ou com a API fora, a sessão ainda pode valer: sair levaria o
+  // usuário para o login à toa.
+  it('keeps the session when the refresh fails on the network', async () => {
+    vi.mocked(getToken).mockReturnValue('expired-token')
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(401, {}))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { api } = await import('./api')
+    await expect(api.get('transactions').json()).rejects.toThrow('Failed to fetch')
+    expect(endSessionMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps the session when the refresh answers 5xx', async () => {
+    vi.mocked(getToken).mockReturnValue('expired-token')
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(401, {}))
+      .mockResolvedValueOnce(jsonResponse(503, {}))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { api } = await import('./api')
+    await expect(api.get('transactions').json()).rejects.toThrow()
+    expect(endSessionMock).not.toHaveBeenCalled()
+  })
+
   it('does not try to refresh a 401 coming from the refresh call itself', async () => {
     vi.mocked(getToken).mockReturnValue(undefined)
 

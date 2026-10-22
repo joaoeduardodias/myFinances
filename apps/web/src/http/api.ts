@@ -1,4 +1,4 @@
-import ky from 'ky'
+import ky, { HTTPError } from 'ky'
 
 import { endSession } from '@/auth/end-session'
 import { getToken, setToken } from '@/lib/cookies'
@@ -6,6 +6,11 @@ import { getToken, setToken } from '@/lib/cookies'
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3333'
 
 let refreshPromise: Promise<string> | null = null
+
+// Falha de rede ou 5xx na renovação sobe do hook como o erro original. O ky
+// repetiria a requisição (GET repete em erro de rede), e a repetição, já sem
+// renovar, terminaria num 401 que a tela leria como sessão morta.
+const refreshFailures = new WeakSet<Error>()
 
 // Uma promise só, compartilhada: requisições em paralelo que recebem 401 ao
 // mesmo tempo (várias `useQuery` na mesma tela) não podem cada uma chamar
@@ -34,6 +39,9 @@ export const api = ky.create({
   // Para o navegador guardar o cookie `httpOnly` do refresh token que login devolve, e mandá-lo no logout. Ele só viaja para
   // `/sessions`; o resto da API se autentica pelo header abaixo.
   credentials: 'include',
+  retry: {
+    shouldRetry: ({ error }) => (refreshFailures.has(error) ? false : undefined),
+  },
   hooks: {
     beforeRequest: [
       (request) => {
@@ -63,7 +71,7 @@ export const api = ky.create({
               request: new Request(request, { headers }),
               code: 'TOKEN_REFRESHED',
             })
-          } catch {
+          } catch (error) {
             // Outra aba pode ter renovado primeiro — o cookie já mudou
             // embora esta aba não tenha feito a renovação (ela perdeu a
             // corrida: seu refresh token já tinha sido rotacionado). Usa o
@@ -76,6 +84,15 @@ export const api = ky.create({
                 request: new Request(request, { headers }),
                 code: 'TOKEN_REFRESHED',
               })
+            }
+            // Só a recusa do refresh token encerra a sessão. Sem rede ou com
+            // a API fora (5xx) ele ainda pode valer: o erro sobe para a tela.
+            const refused =
+              error instanceof HTTPError &&
+              (error.response.status === 400 || error.response.status === 401)
+            if (!refused) {
+              if (error instanceof Error) refreshFailures.add(error)
+              throw error
             }
             endSession()
           }
