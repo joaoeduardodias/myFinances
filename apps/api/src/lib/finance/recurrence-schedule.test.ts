@@ -22,4 +22,16 @@ describe('expectedDates', () => {
     const rule = { dayRule: 'DAY_OF_MONTH', dayValue: 10, nonBusinessDayPolicy: 'KEEP' } as const
     expect(expectedDates(rule, '2026-01-11', '2026-03-09')).toEqual(['2026-02-10'])
   })
+
+  it('inclui a data do mês seguinte antecipada para dentro do intervalo', () => {
+    const rent = { dayRule: 'DAY_OF_MONTH', dayValue: 1, nonBusinessDayPolicy: 'ANTICIPATE' } as const
+    // 01/11/2026 é domingo
+    expect(expectedDates(rent, '2026-10-01', '2026-10-31')).toEqual(['2026-10-01', '2026-10-30'])
+  })
+
+  it('inclui a data do mês anterior adiada para dentro do intervalo', () => {
+    const rule = { dayRule: 'DAY_OF_MONTH', dayValue: 31, nonBusinessDayPolicy: 'POSTPONE' } as const
+    // 31/05/2026 é domingo, vai para 01/06
+    expect(expectedDates(rule, '2026-06-01', '2026-06-30')).toEqual(['2026-06-01', '2026-06-30'])
+  })
 })

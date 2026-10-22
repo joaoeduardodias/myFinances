@@ -23,26 +23,33 @@ function dateInMonth(rule: RecurrenceRule, year: number, month: number): IsoDate
   return adjustToBusinessDay(date, rule.nonBusinessDayPolicy)
 }
 
-/** Uma data por mês, ordenadas, dentro de `[from, to]`. */
+/**
+ * Uma data por mês, ordenadas, dentro de `[from, to]`.
+ *
+ * Gera candidatas também do mês anterior a `from` e do seguinte a `to`: a
+ * política de dia útil pode puxar ou empurrar a data para dentro do intervalo.
+ */
 export function expectedDates(
   rule: RecurrenceRule,
   from: IsoDate,
   to: IsoDate,
 ): IsoDate[] {
-  const dates: IsoDate[] = []
+  const dates = new Set<IsoDate>()
   let year = Number(from.slice(0, 4))
-  let month = Number(from.slice(5, 7))
+  let month = Number(from.slice(5, 7)) - 1
   const lastYear = Number(to.slice(0, 4))
-  const lastMonth = Number(to.slice(5, 7))
+  const lastMonth = Number(to.slice(5, 7)) + 1
 
-  while (year < lastYear || (year === lastYear && month <= lastMonth)) {
-    const date = dateInMonth(rule, year, month)
-    if (date >= from && date <= to) dates.push(date)
+  // Meses fora de 1-12 são normalizados na comparação abaixo.
+  while (year * 12 + month <= lastYear * 12 + lastMonth) {
+    const normalized = year * 12 + (month - 1)
+    const date = dateInMonth(
+      rule,
+      Math.floor(normalized / 12),
+      (normalized % 12) + 1,
+    )
+    if (date >= from && date <= to) dates.add(date)
     month += 1
-    if (month > 12) {
-      month = 1
-      year += 1
-    }
   }
-  return dates
+  return [...dates].sort()
 }
