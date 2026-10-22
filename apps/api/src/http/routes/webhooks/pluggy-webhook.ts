@@ -9,8 +9,8 @@ import { prisma } from '@/lib/prisma'
 import { syncConnection } from '@/services/sync-connection'
 
 import { UnauthorizedError } from '../_errors/unauthorized-error'
+import { WEBHOOK_SECRET_HEADER } from './webhook-secret-header'
 
-export const WEBHOOK_SECRET_HEADER = 'x-myfinances-webhook-secret'
 
 const bodySchema = z.object({
   event: z.string(),
