@@ -139,6 +139,19 @@ describe('createPluggyClient', () => {
     expect(accounts.map((a) => a.id)).toEqual(['a1', 'a2'])
   })
 
+  it('registerWebhook envia url, event all e headers com a API key', async () => {
+    const { client, fetch } = setup(() => ({ body: {} }))
+    await client.registerWebhook('https://x.test/webhooks/pluggy', { h: 'v' })
+    const [input, init] = fetch.mock.calls.at(-1)!
+    expect(new URL(String(input)).pathname).toBe('/webhooks')
+    expect((init!.headers as Record<string, string>)['X-API-KEY']).toBe('key-1')
+    expect(JSON.parse(String(init!.body))).toEqual({
+      url: 'https://x.test/webhooks/pluggy',
+      event: 'all',
+      headers: { h: 'v' },
+    })
+  })
+
   it('404 em getItem vira PluggyNotFoundError', async () => {
     const { client } = setup(() => ({ status: 404, body: { message: 'not found' } }))
 

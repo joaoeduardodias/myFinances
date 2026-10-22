@@ -66,6 +66,7 @@ function makeClient(over: Partial<PluggyClient> = {}): PluggyClient {
     listAccounts: vi.fn(async () => [bankAccount]),
     listTransactions: vi.fn(async () => [pluggyTx()]),
     listBills: vi.fn(async () => []),
+    registerWebhook: vi.fn(async () => undefined),
     ...over,
   }
 }

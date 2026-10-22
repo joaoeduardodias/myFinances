@@ -31,6 +31,7 @@ import { getConnections } from './routes/connections/get-connections'
 import { syncAll } from './routes/connections/sync-all'
 import { syncConnectionRoute } from './routes/connections/sync-connection'
 import { health } from './routes/health/health'
+import { registerPluggyWebhook } from './routes/webhooks/pluggy-webhook'
 import { swaggerSchemaTransform, swaggerTransformObject } from './swagger'
 import { trustProxy } from './trusted-proxy'
 
@@ -120,6 +121,9 @@ app.register(deleteConnection)
 app.register(syncConnectionRoute)
 app.register(syncAll)
 app.register(getAccounts)
+// Sem `PLUGGY_WEBHOOK_SECRET` a rota nem existe: um webhook sem segredo seria
+// um endpoint aberto que dispara sincronizações.
+registerPluggyWebhook(app, env.PLUGGY_WEBHOOK_SECRET)
 
 async function start() {
   try {
