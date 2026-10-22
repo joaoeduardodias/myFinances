@@ -121,6 +121,7 @@ export function createPluggyClient(opts: {
     async listTransactions(accountId, dateFrom) {
       const query = { accountId, dateFrom }
       const results: PluggyTransaction[] = []
+      const seen = new Set<string>()
       let after: string | null = null
       while (true) {
         const body: Cursor<PluggyTransaction> = await get(
@@ -129,7 +130,12 @@ export function createPluggyClient(opts: {
         )
         results.push(...body.results)
         const next = nextCursor(body.next)
-        if (!next || next === after) return results
+        if (!next) return results
+        // Cursor repetido é laço: melhor falhar do que gravar dados pela metade.
+        if (seen.has(next)) {
+          throw new PluggyError(`Pluggy repetiu o cursor de transações da conta ${accountId}`)
+        }
+        seen.add(next)
         after = next
       }
     },
@@ -145,8 +151,9 @@ export function createPluggyClient(opts: {
  */
 function nextCursor(next: string | null | undefined): string | null {
   if (!next) return null
-  if (!next.includes('=')) return next
-  return new URLSearchParams(next.replace(/^.*\?/, '')).get('after')
+  // Cursor puro pode ser base64 com `=` no fim; só é query string se tiver `after=`.
+  if (!/(^|[?&])after=/.test(next)) return next
+  return new URLSearchParams(next.replace(/^[^?]*\?/, '')).get('after')
 }
 
 export const pluggy = createPluggyClient({

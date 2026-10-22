@@ -83,7 +83,12 @@ type PairingRow = {
   account: { type: 'BANK' | 'CREDIT' | 'WALLET' }
 }
 
-let existingTxs: { pluggyTransactionId: string; userId: string; categoryLocked: boolean }[]
+let existingTxs: {
+  pluggyTransactionId: string
+  userId: string
+  categoryLocked: boolean
+  accountId: string
+}[]
 let pairingRows: PairingRow[]
 
 beforeEach(() => {
@@ -113,6 +118,7 @@ beforeEach(() => {
   }))
   prismaMock.transaction.aggregate.mockResolvedValue({ _sum: { amountCents: 0 } })
   prismaMock.cardBill.upsert.mockResolvedValue({})
+  prismaMock.account.deleteMany.mockResolvedValue({ count: 0 })
 })
 
 describe('syncConnection', () => {
@@ -157,7 +163,7 @@ describe('syncConnection', () => {
     await syncConnection('conn-1', { client: makeClient(), today: TODAY })
 
     const call = prismaMock.account.upsert.mock.calls[0][0]
-    expect(call.where).toEqual({ pluggyAccountId: 'p-acc-new' })
+    expect(call.where).toEqual({ pluggyAccountId: 'p-acc-new', userId: USER })
     expect(call.create).toMatchObject({
       userId: USER,
       connectionId: 'conn-1',
@@ -247,7 +253,9 @@ describe('syncConnection', () => {
   })
 
   it('o mesmo pluggyTransactionId numa conta nova (item renovado) faz update, não create', async () => {
-    existingTxs = [{ pluggyTransactionId: 'p-tx-1', userId: USER, categoryLocked: false }]
+    existingTxs = [
+      { pluggyTransactionId: 'p-tx-1', userId: USER, categoryLocked: false, accountId: 'db-old' },
+    ]
 
     await syncConnection('conn-1', { client: makeClient(), today: TODAY })
 
@@ -259,7 +267,7 @@ describe('syncConnection', () => {
   })
 
   it('não toca na transação que já é de outro usuário', async () => {
-    existingTxs = [{ pluggyTransactionId: 'p-tx-1', userId: 'other', categoryLocked: false }]
+    existingTxs = [{ pluggyTransactionId: 'p-tx-1', userId: 'other', categoryLocked: false, accountId: 'x' }]
 
     await syncConnection('conn-1', { client: makeClient(), today: TODAY })
 
@@ -267,7 +275,7 @@ describe('syncConnection', () => {
   })
 
   it('categoria travada não é sobrescrita', async () => {
-    existingTxs = [{ pluggyTransactionId: 'p-tx-1', userId: USER, categoryLocked: true }]
+    existingTxs = [{ pluggyTransactionId: 'p-tx-1', userId: USER, categoryLocked: true, accountId: 'db-p-acc-new' }]
 
     await syncConnection('conn-1', { client: makeClient(), today: TODAY })
 
@@ -397,6 +405,121 @@ describe('syncConnection', () => {
 
     expect(prismaMock.transaction.create).not.toHaveBeenCalled()
     expect(prismaMock.transaction.update).not.toHaveBeenCalled()
+  })
+
+  it('mesmo pluggyAccountId vindo de outra conexão aponta a conta para esta', async () => {
+    prismaMock.account.findMany.mockResolvedValue([
+      { id: 'db-p-acc-new', pluggyAccountId: 'p-acc-new', userId: USER, dueDay: null, closingDay: null },
+    ])
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    expect(prismaMock.account.upsert.mock.calls[0][0].update.connectionId).toBe('conn-1')
+  })
+
+  it('remove só a conta antiga, de outra conexão, que ficou sem transações', async () => {
+    existingTxs = [
+      { pluggyTransactionId: 'p-tx-1', userId: USER, categoryLocked: false, accountId: 'db-old' },
+    ]
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    // O filtro `transactions: { none: {} }` é o que mantém a conta antiga que
+    // ainda tem transações; o banco decide na mesma query.
+    expect(prismaMock.account.deleteMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ['db-old'] },
+        userId: USER,
+        connectionId: { not: 'conn-1' },
+        type: { not: 'WALLET' },
+        transactions: { none: {} },
+      },
+    })
+  })
+
+  it('não remove conta nenhuma quando nenhuma transação mudou de conta', async () => {
+    existingTxs = [
+      { pluggyTransactionId: 'p-tx-1', userId: USER, categoryLocked: false, accountId: 'db-p-acc-new' },
+    ]
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    expect(prismaMock.account.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it('entrada de pagamento de fatura no cartão sem par vira transferência sozinha', async () => {
+    pairingRows = [
+      row({
+        id: 'card-pay',
+        amountCents: 80000,
+        description: 'Pagamento de fatura',
+        account: { type: 'CREDIT' },
+      }),
+    ]
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+      where: { id: 'card-pay' },
+      data: { isTransfer: true },
+    })
+  })
+
+  it('saque em conta CREDIT não cria crédito na Carteira', async () => {
+    pairingRows = [
+      row({ id: 'saque-card', amountCents: -20000, description: 'SAQUE', account: { type: 'CREDIT' } }),
+    ]
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    expect(prismaMock.transaction.create).not.toHaveBeenCalled()
+  })
+
+  it('duas sincronizações do mesmo usuário rodam uma depois da outra', async () => {
+    const events: string[] = []
+    let releaseFirst!: () => void
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    let calls = 0
+    const client = makeClient({
+      getItem: vi.fn(async () => {
+        const n = ++calls
+        events.push(`start-${n}`)
+        if (n === 1) await firstGate
+        return item
+      }),
+      listBills: vi.fn(async () => []),
+    })
+    prismaMock.connection.update.mockImplementation(async ({ data }) => {
+      if (data.lastSyncedAt) events.push(`end-${calls}`)
+      return {}
+    })
+
+    const first = syncConnection('conn-1', { client, today: TODAY })
+    const second = syncConnection('conn-1', { client, today: TODAY })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(events).toEqual(['start-1'])
+
+    releaseFirst()
+    await Promise.all([first, second])
+    expect(events).toEqual(['start-1', 'end-1', 'start-2', 'end-2'])
+  })
+
+  it('a fila continua depois de uma sincronização que falhou', async () => {
+    const failing = makeClient({
+      getItem: vi.fn(async () => {
+        throw new Error('fora do ar')
+      }),
+    })
+    const ok = makeClient()
+
+    const first = syncConnection('conn-1', { client: failing, today: TODAY })
+    const second = syncConnection('conn-1', { client: ok, today: TODAY })
+
+    await expect(first).rejects.toThrow('fora do ar')
+    await expect(second).resolves.toBeUndefined()
+    expect(ok.getItem).toHaveBeenCalled()
   })
 
   it('erro da Pluggy grava lastError e relança', async () => {

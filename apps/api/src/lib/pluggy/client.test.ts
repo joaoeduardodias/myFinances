@@ -106,6 +106,28 @@ describe('createPluggyClient', () => {
     expect(urls[2].searchParams.get('accountId')).toBe('acc-1')
   })
 
+  it('cursor puro em base64 com = no fim segue até o fim', async () => {
+    const { client } = setup((url) => {
+      const after = url.searchParams.get('after')
+      if (!after) return { body: { results: [{ id: 't1' }], next: 'YWJj==' } }
+      if (after === 'YWJj==') return { body: { results: [{ id: 't2' }], next: 'ZGVm=' } }
+      return { body: { results: [{ id: 't3' }], next: null } }
+    })
+
+    const txs = await client.listTransactions('acc-1', '2026-01-01')
+
+    expect(txs.map((t) => t.id)).toEqual(['t1', 't2', 't3'])
+  })
+
+  it('cursor em ciclo A → B → A falha em vez de devolver dados pela metade', async () => {
+    const { client } = setup((url) => {
+      const after = url.searchParams.get('after')
+      return { body: { results: [{ id: after ?? 'first' }], next: after === 'A' ? 'B' : 'A' } }
+    })
+
+    await expect(client.listTransactions('acc-1', '2026-01-01')).rejects.toThrow(/cursor/)
+  })
+
   it('listAccounts segue as páginas', async () => {
     const { client } = setup((url) => {
       const page = Number(url.searchParams.get('page') ?? 1)

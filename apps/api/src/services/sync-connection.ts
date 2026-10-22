@@ -47,16 +47,38 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+// Webhook e o botão Sincronizar podem disparar ao mesmo tempo para o mesmo
+// usuário; em paralelo, os upserts colidem (P2002). A API roda numa instância
+// só, então uma fila em memória por usuário basta.
+const userQueues = new Map<string, Promise<void>>()
+
+function runExclusive(userId: string, task: () => Promise<void>): Promise<void> {
+  const previous = userQueues.get(userId) ?? Promise.resolve()
+  const run = previous.then(task)
+  const tail = run.catch(() => {})
+  userQueues.set(userId, tail)
+  tail.then(() => {
+    if (userQueues.get(userId) === tail) userQueues.delete(userId)
+  })
+  return run
+}
+
 export async function syncConnection(
   connectionId: string,
   opts: { client?: PluggyClient; today?: IsoDate } = {},
 ): Promise<void> {
-  const client = opts.client ?? pluggy
-  const today = opts.today ?? todayIso()
-
   const connection = await prisma.connection.findUnique({ where: { id: connectionId } })
   if (!connection) throw new Error(`Conexão ${connectionId} não encontrada`)
-  const { userId } = connection
+  return runExclusive(connection.userId, () => runSync(connection, opts))
+}
+
+async function runSync(
+  connection: { id: string; userId: string; pluggyItemId: string; lastSyncedAt: Date | null },
+  opts: { client?: PluggyClient; today?: IsoDate },
+): Promise<void> {
+  const client = opts.client ?? pluggy
+  const today = opts.today ?? todayIso()
+  const { id: connectionId, userId } = connection
 
   try {
     const item = await client.getItem(connection.pluggyItemId)
@@ -75,7 +97,8 @@ export async function syncConnection(
     const dateFrom = connection.lastSyncedAt
       ? addDays(todayIso(env.TIMEZONE, connection.lastSyncedAt), -RESYNC_OVERLAP_DAYS)
       : addDays(today, -FIRST_SYNC_DAYS)
-    await syncTransactions(client, accounts, userId, dateFrom)
+    const leftAccountIds = await syncTransactions(client, accounts, userId, dateFrom)
+    await removeAbandonedAccounts(leftAccountIds, userId, connectionId)
     await syncBills(client, accounts, userId)
     await pairTransfers(userId, today)
 
@@ -116,10 +139,11 @@ async function syncAccounts(
       type: account.type,
       name: account.name,
       number: account.number ?? null,
+      // Em conta CREDIT, positivo é o valor devido no cartão (convenção da Pluggy).
       balanceCents: Math.round(account.balance * 100),
     }
     const saved = await prisma.account.upsert({
-      where: { pluggyAccountId: account.id },
+      where: { pluggyAccountId: account.id, userId },
       create: { ...fields, userId, pluggyAccountId: account.id, dueDay, closingDay },
       update: {
         ...fields,
@@ -148,7 +172,9 @@ async function syncTransactions(
   accounts: SyncedAccount[],
   userId: string,
   dateFrom: IsoDate,
-) {
+): Promise<Set<string>> {
+  // Contas de onde alguma transação saiu (item renovado trouxe conta nova).
+  const leftAccountIds = new Set<string>()
   const rules = await prisma.categoryRule.findMany({
     where: { userId },
     select: { descriptionKey: true, category: true },
@@ -162,13 +188,14 @@ async function syncTransactions(
     // Ler antes para saber de quem é a linha e se a categoria está travada.
     const existing = await prisma.transaction.findMany({
       where: { pluggyTransactionId: { in: remote.map((t) => t.id) } },
-      select: { pluggyTransactionId: true, userId: true, categoryLocked: true },
+      select: { pluggyTransactionId: true, userId: true, categoryLocked: true, accountId: true },
     })
     const existingById = new Map(existing.map((t) => [t.pluggyTransactionId, t]))
 
     for (const tx of remote) {
       const current = existingById.get(tx.id)
       if (current && current.userId !== userId) continue
+      if (current && current.accountId !== account.id) leftAccountIds.add(current.accountId)
 
       const key = descriptionKey(tx.description)
       // Chave vazia (descrição só de dígitos/prefixo) não casa com regra.
@@ -192,6 +219,29 @@ async function syncTransactions(
       })
     }
   }
+  return leftAccountIds
+}
+
+/**
+ * Renovar o Meu Pluggy cria um item (e uma Connection) novo, com contas novas.
+ * A conta antiga, de outra conexão, que ficou sem nenhuma transação é removida
+ * para o saldo não contar duas vezes; as faturas dela vão junto (Cascade).
+ */
+async function removeAbandonedAccounts(
+  accountIds: Set<string>,
+  userId: string,
+  connectionId: string,
+) {
+  if (accountIds.size === 0) return
+  await prisma.account.deleteMany({
+    where: {
+      id: { in: [...accountIds] },
+      userId,
+      connectionId: { not: connectionId },
+      type: { not: 'WALLET' },
+      transactions: { none: {} },
+    },
+  })
 }
 
 async function syncBills(client: PluggyClient, accounts: SyncedAccount[], userId: string) {
@@ -253,14 +303,23 @@ async function pairTransfers(userId: string, today: IsoDate) {
 
   let walletId: string | null = null
   for (const tx of txs) {
-    if (paired.has(tx.id) || tx.isTransfer || tx.transferLocked || tx.amountCents >= 0) continue
+    if (paired.has(tx.id) || tx.isTransfer || tx.transferLocked || tx.amountCents === 0) continue
 
-    if (tx.account.type === 'BANK' && isBillPaymentDescription(tx.description)) {
+    // Pagamento de fatura sem par: a saída no banco e a entrada no cartão são
+    // transferência; senão a fatura conta duas vezes ou a entrada vira estorno.
+    const billPaymentSide =
+      (tx.account.type === 'BANK' && tx.amountCents < 0) ||
+      (tx.account.type === 'CREDIT' && tx.amountCents > 0)
+    if (billPaymentSide && isBillPaymentDescription(tx.description)) {
       await prisma.transaction.update({ where: { id: tx.id }, data: { isTransfer: true } })
       continue
     }
 
-    if (tx.account.type !== 'WALLET' && isWithdrawalDescription(tx.description)) {
+    if (
+      tx.account.type === 'BANK' &&
+      tx.amountCents < 0 &&
+      isWithdrawalDescription(tx.description)
+    ) {
       walletId ??= (await ensureWalletAccount(userId)).id
       const wallet = walletId
       // O par (transferPairId nos dois lados) é o que torna isto idempotente:
