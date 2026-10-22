@@ -285,6 +285,47 @@ describe('POST /transactions', () => {
     })
     expect(res.statusCode).toBe(400)
   })
+
+  it('data que não existe no calendário dá 400', async () => {
+    for (const date of ['2026-02-31', '2026-13-01', '2026-00-10', '2025-02-29']) {
+      const res = await call(createManualTransaction, {
+        method: 'POST',
+        url: '/transactions',
+        body: { date, description: 'x', amountCents: -100 },
+      })
+      expect(res.statusCode, date).toBe(400)
+    }
+    expect(prismaMock.transaction.create).not.toHaveBeenCalled()
+  })
+
+  it('aceita 29 de fevereiro em ano bissexto', async () => {
+    prismaMock.account.findFirst.mockResolvedValue({ id: walletId })
+    prismaMock.transaction.create.mockResolvedValue({
+      id: txId,
+      accountId: walletId,
+      date: new Date('2028-02-29T00:00:00Z'),
+      description: 'x',
+      amountCents: -100,
+      category: null,
+      categoryLocked: false,
+      isTransfer: false,
+      source: 'MANUAL',
+      account: { name: 'Carteira', type: 'WALLET' },
+    })
+    prismaMock.transaction.aggregate.mockResolvedValue({ _sum: { amountCents: -100 } })
+
+    const res = await call(createManualTransaction, {
+      method: 'POST',
+      url: '/transactions',
+      body: { date: '2028-02-29', description: 'x', amountCents: -100 },
+    })
+    expect(res.statusCode).toBe(201)
+  })
+
+  it('filtro de período com data impossível dá 400', async () => {
+    const res = await call(getTransactions, { method: 'GET', url: '/transactions?from=2026-02-30' })
+    expect(res.statusCode).toBe(400)
+  })
 })
 
 describe('DELETE /transactions/:id', () => {

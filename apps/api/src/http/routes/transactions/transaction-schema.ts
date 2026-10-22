@@ -28,7 +28,16 @@ export const transactionSchema = z.object({
   account: z.object({ name: z.string(), type: z.string() }),
 })
 
-export const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida (use AAAA-MM-DD).')
+/** Volta de `Date.UTC` igual ao texto: 2026-02-31 viraria 03/03 e é recusado. */
+function isCalendarDate(value: string): boolean {
+  const date = new Date(`${value}T00:00:00Z`)
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+}
+
+export const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida (use AAAA-MM-DD).')
+  .refine(isCalendarDate, 'Data inexistente no calendário.')
 
 type TransactionRow = Omit<z.infer<typeof transactionSchema>, 'date' | 'account'> & {
   date: Date
