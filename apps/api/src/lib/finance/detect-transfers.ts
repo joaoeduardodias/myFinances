@@ -43,7 +43,8 @@ function daysApart(a: IsoDate, b: IsoDate): number {
  * um gasto de verdade das contas.
  *
  * Quem chega aqui ainda não tem par: a que já é transferência (pagamento de
- * fatura marcado sozinho) continua candidata, a travada pelo usuário não.
+ * fatura marcado sozinho) continua candidata, mas só com o cartão; a travada
+ * pelo usuário não.
  */
 export function detectTransferPairs(txs: TransferCandidate[]): [string, string][] {
   const free = txs.filter((t) => !t.transferLocked && t.amountCents !== 0)
@@ -56,6 +57,8 @@ export function detectTransferPairs(txs: TransferCandidate[]): [string, string][
   for (const out of outflows) {
     for (const inflow of inflows) {
       if (inflow.accountId === out.accountId) continue
+      // A já marcada sozinha é pagamento de fatura: o outro lado é o cartão.
+      if ((out.isTransfer || inflow.isTransfer) && inflow.accountType !== 'CREDIT') continue
       if (inflow.amountCents !== -out.amountCents) continue
       const days = daysApart(out.date, inflow.date)
       if (days <= MAX_DAYS_APART) candidates.push({ out: out.id, in: inflow.id, days })

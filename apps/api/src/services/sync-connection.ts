@@ -48,7 +48,6 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-
 // Webhook e o botão Sincronizar podem disparar ao mesmo tempo para o mesmo
 // usuário; em paralelo, os upserts colidem (P2002). A API roda numa instância
 // só, então uma fila em memória por usuário basta.

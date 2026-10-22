@@ -108,6 +108,17 @@ describe('detectTransferPairs', () => {
     ).toEqual([['a', 'b']])
   })
 
+  // Já marcada sozinha só pode ser pagamento de fatura: não leva junto uma
+  // entrada de mesmo valor em outra conta corrente.
+  it('a já marcada como transferência só pareia com o cartão', () => {
+    expect(
+      detectTransferPairs([
+        tx('a', 'bank-a', '2026-10-10', -50000, { isTransfer: true }),
+        tx('b', 'bank-b', '2026-10-10', 50000),
+      ]),
+    ).toEqual([])
+  })
+
   it('pareia saída do banco com entrada no cartão (pagamento de fatura)', () => {
     expect(
       detectTransferPairs([
