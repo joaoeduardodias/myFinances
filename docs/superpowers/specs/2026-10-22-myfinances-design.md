@@ -81,6 +81,7 @@ No começo o único usuário é o João, mas o sistema já nasce multiusuário: 
   - um Postgres gratuito que não expire (o do Render free expira; o Neon é uma opção);
   - o cold start do Render free quando o webhook chegar;
   - a sincronização ao abrir o app como rede de segurança.
+- **Tema (decisão do João):** escuro por padrão, com seletor Escuro/Claro/Sistema.
 - **Web em produção**: na Vercel, como no `controlPec` *(palpite do designer, não confirmado)*.
 - **Holerites**:
   - O upload passa pela API (multipart), não por URL assinada como no `controlPec`, porque a API precisa ler o PDF.
