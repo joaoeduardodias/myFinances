@@ -1,0 +1,26 @@
+{
+  "name": "@myfinances/env",
+  "version": "0.0.0",
+  "private": true,
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "test": "tsx --test index.test.ts"
+  },
+  "devDependencies": {
+    "@myfinances/eslint-config": "workspace:*",
+    "@myfinances/prettier": "workspace:*",
+    "@myfinances/ts-config": "workspace:*",
+    "@types/node": "^24.0.7"
+  },
+  "eslintConfig": {
+    "extends": [
+      "@myfinances/eslint-config/library"
+    ]
+  },
+  "prettier": "@myfinances/prettier",
+  "dependencies": {
+    "@t3-oss/env-core": "^0.13.8",
+    "zod": "^4.3.6"
+  }
+}

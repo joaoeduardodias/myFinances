@@ -1,0 +1,7 @@
+{
+  "extends": "@myfinances/ts-config/library.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["index.ts"]
+}

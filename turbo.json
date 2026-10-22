@@ -1,0 +1,41 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "ui": "tui",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": ["dist/**"],
+      // O Turbo 2 roda em env mode strict: variável não declarada aqui não
+      // chega na task. Localmente ninguém percebe, porque o `env:load` injeta
+      // do `.env` por dentro do processo — mas no CI, que passa as variáveis
+      // pelo ambiente, o `prisma generate` não achava DATABASE_URL.
+      "env": ["DATABASE_URL", "VITE_*"]
+    },
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      // O `test` da API roda `db:generate` antes do vitest, e o Prisma CLI
+      // exige DATABASE_URL. Os testes não conectam: usam mock.
+      "env": ["DATABASE_URL"]
+    },
+    "test:e2e": {
+      "cache": false
+    },
+    // Fala com um Postgres de verdade (`myfinances_test`): nunca cacheia e não
+    // entra no `test`, que roda em CI sem banco.
+    "test:integration": {
+      "cache": false,
+      "env": ["DATABASE_URL"]
+    },
+    "check-types": {
+      "dependsOn": ["^check-types"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}

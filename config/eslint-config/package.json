@@ -1,0 +1,22 @@
+{
+  "name": "@myfinances/eslint-config",
+  "version": "0.0.0",
+  "type": "commonjs",
+  "private": true,
+  "exports": {
+    "./library": "./library.cjs",
+    "./node": "./node.cjs",
+    "./react": "./react.cjs"
+  },
+  "devDependencies": {
+    "@rocketseat/eslint-config": "2.2.2",
+    "@myfinances/prettier": "workspace:*",
+    "eslint-plugin-simple-import-sort": "12.1.1"
+  },
+  "prettier": "@myfinances/prettier",
+  "eslintConfig": {
+    "extends": [
+      "./library.cjs"
+    ]
+  }
+}

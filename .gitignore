@@ -1,0 +1,22 @@
+node_modules
+# Cache local do pnpm, criado por `store-dir` na raiz do projeto.
+.pnpm-store/
+dist
+.turbo
+.env
+.env*.bak
+*.log
+
+# Scratch dos skills superpowers: mockups de brainstorm, ledger e pacotes de review
+.superpowers/
+
+# Git worktrees locais
+.claude/worktrees/
+.worktrees/
+
+# Playwright
+test-results/
+playwright-report/
+
+# Amostras locais (extratos, exports) que não vão para o git
+samples/
