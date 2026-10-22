@@ -11,7 +11,8 @@
   "devDependencies": {
     "@rocketseat/eslint-config": "2.2.2",
     "@myfinances/prettier": "workspace:*",
-    "eslint-plugin-simple-import-sort": "12.1.1"
+    "eslint-plugin-simple-import-sort": "12.1.1",
+    "typescript": "^5"
   },
   "prettier": "@myfinances/prettier",
   "eslintConfig": {

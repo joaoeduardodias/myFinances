@@ -1,0 +1,3 @@
+dist
+src/prisma/generated
+node_modules

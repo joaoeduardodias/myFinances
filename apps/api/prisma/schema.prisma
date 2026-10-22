@@ -1,0 +1,38 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/prisma/generated"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String        @id @default(uuid())
+  name         String
+  email        String        @unique
+  passwordHash String        @map("password_hash")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  sessions     UserSession[]
+
+  @@map("users")
+}
+
+model UserSession {
+  id                       String    @id @default(uuid())
+  refreshTokenHash         String    @unique @map("refresh_token_hash")
+  /// O token anterior e quando foi trocado: se ele voltar depois da janela da
+  /// rotação, alguém copiou o refresh token e a sessão é revogada.
+  previousRefreshTokenHash String?   @unique @map("previous_refresh_token_hash")
+  refreshTokenRotatedAt    DateTime? @map("refresh_token_rotated_at")
+  expiresAt                DateTime  @map("expires_at")
+  revokedAt                DateTime? @map("revoked_at")
+  userId                   String    @map("user_id")
+  user                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt                DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("user_sessions")
+}

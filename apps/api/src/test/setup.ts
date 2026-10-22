@@ -1,0 +1,18 @@
+// Todo módulo que importa `@myfinances/env` valida o ambiente na carga, então
+// os testes unitários precisam de TODAS as variáveis, com valores de teste.
+process.env.DATABASE_URL ||= 'postgresql://test:test@localhost:5432/test'
+process.env.JWT_SECRET ||= 'jwt-secret-de-teste-com-32-caracteres'
+process.env.PORT ||= '3333'
+process.env.TIMEZONE ||= 'America/Sao_Paulo'
+process.env.WEB_URL ||= 'http://localhost:5173'
+process.env.API_DOCS_ENABLED ||= 'false'
+process.env.PLUGGY_CLIENT_ID ||= 'test-pluggy-client-id'
+process.env.PLUGGY_CLIENT_SECRET ||= 'test-pluggy-client-secret'
+process.env.PLUGGY_BASE_URL ||= 'https://api.pluggy.test'
+process.env.PLUGGY_WEBHOOK_SECRET ||= 'test-webhook-secret-com-32-caracteres'
+process.env.S3_ENDPOINT ||= 'https://account.r2.cloudflarestorage.com'
+process.env.S3_REGION ||= 'auto'
+process.env.S3_BUCKET ||= 'myfinances-test'
+process.env.S3_ACCESS_KEY_ID ||= 'test-access-key'
+process.env.S3_SECRET_ACCESS_KEY ||= 'test-secret-key'
+process.env.VITE_API_URL ||= 'http://localhost:3333'

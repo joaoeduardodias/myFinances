@@ -1,0 +1,78 @@
+{
+  "name": "@myfinances/api",
+  "version": "1.0.0",
+  "description": "API do myFinances",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm db:generate && pnpm env:load tsx watch src/http/server.ts",
+    "build": "pnpm db:generate && tsc --noEmit && tsup",
+    "test": "pnpm db:generate && pnpm env:load vitest run",
+    "lint": "eslint src --ext .ts",
+    "test:watch": "pnpm db:generate && pnpm env:load vitest",
+    "test:integration": "pnpm db:generate && pnpm env:load:e2e vitest run --config vitest.integration.config.ts",
+    "start": "pnpm env:load node dist/http/server.js",
+    "db:migrate": "pnpm env:load prisma migrate dev && pnpm db:generate",
+    "db:migrate:deploy": "pnpm env:load prisma migrate deploy",
+    "db:studio": "pnpm env:load prisma studio",
+    "db:generate": "pnpm env:load prisma generate",
+    "db:pull": "pnpm env:load prisma db pull",
+    "db:reset": "pnpm env:load prisma migrate reset",
+    "env:load": "dotenv -e ../../.env --",
+    "env:load:e2e": "dotenv -e ../../.env.e2e -e ../../.env --",
+    "dev:e2e": "pnpm db:generate && pnpm env:load:e2e tsx watch src/http/server.ts",
+    "pluggy:webhook": "pnpm env:load tsx src/scripts/register-pluggy-webhook.ts"
+  },
+  "dependencies": {
+    "@myfinances/env": "workspace:*",
+    "@fastify/cookie": "^11.1.3",
+    "@fastify/cors": "^11.0.1",
+    "@fastify/jwt": "^9.1.0",
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/swagger": "^9.5.1",
+    "@fastify/swagger-ui": "^5.2.3",
+    "@prisma/adapter-pg": "^7.3.0",
+    "@prisma/client": "7.5.0",
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^17.3.1",
+    "fastify": "^5.4.0",
+    "fastify-plugin": "^5.0.1",
+    "fastify-type-provider-zod": "^5.0.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@myfinances/eslint-config": "workspace:*",
+    "@myfinances/prettier": "workspace:*",
+    "@myfinances/ts-config": "workspace:*",
+    "@types/bcryptjs": "^3.0.0",
+    "@types/node": "^24.0.7",
+    "dotenv-cli": "^8.0.0",
+    "eslint": "^8.57.1",
+    "prisma": "7.5.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.20.3",
+    "typescript": "^5",
+    "vitest": "^2.1.9"
+  },
+  "prettier": "@myfinances/prettier",
+  "eslintConfig": {
+    "extends": [
+      "@myfinances/eslint-config/node"
+    ],
+    "rules": {
+      "prettier/prettier": "off",
+      "no-control-regex": "off",
+      "simple-import-sort/imports": "warn",
+      "no-use-before-define": "warn",
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          "ignoreRestSiblings": true
+        }
+      ],
+      "promise/param-names": "warn",
+      "object-shorthand": "warn",
+      "no-unneeded-ternary": "warn",
+      "lines-between-class-members": "warn"
+    }
+  }
+}

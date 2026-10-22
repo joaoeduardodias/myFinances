@@ -1,0 +1,124 @@
+import fastifyCookie from '@fastify/cookie'
+import fastifyCors from '@fastify/cors'
+import fastifyJwt from '@fastify/jwt'
+import type { FastifyDynamicSwaggerOptions } from '@fastify/swagger'
+import fastifySwagger from '@fastify/swagger'
+import fastifySwaggerUi from '@fastify/swagger-ui'
+import { env } from '@myfinances/env'
+import { fastify } from 'fastify'
+import {
+  serializerCompiler,
+  validatorCompiler,
+  ZodTypeProvider,
+} from 'fastify-type-provider-zod'
+
+import { checkDatabaseConnection } from '@/lib/check-database-connection'
+import { newRequestReference } from '@/lib/request-reference'
+
+import { isAllowedOrigin } from './cors'
+import { errorHandler } from './error-handler'
+import { auth } from './middlewares/auth'
+import { rateLimiter } from './middlewares/rate-limit'
+import { authenticateWithPassword } from './routes/auth/authenticate-with-password'
+import { createUser } from './routes/auth/create-user'
+import { getProfile } from './routes/auth/get-profile'
+import { logout } from './routes/auth/logout'
+import { refreshSession } from './routes/auth/refresh-session'
+import { health } from './routes/health/health'
+import { swaggerSchemaTransform, swaggerTransformObject } from './swagger'
+import { trustProxy } from './trusted-proxy'
+
+// `trustProxy` porque a API roda atrás de um proxy: sem isso todo `request.ip`
+// é o IP do proxy, e o limitador por IP deixaria de proteger contra um
+// atacante para virar um interruptor de negação de serviço — o primeiro a
+// estourar o limite trancaria todos os usuários junto. Quantos saltos, e por
+// que não `true`, está em `trusted-proxy.ts`.
+const app = fastify({
+  trustProxy,
+  // O código que aparece na tela quando algo falha do nosso lado, e que
+  // encontra a linha do log com o motivo real.
+  genReqId: newRequestReference,
+}).withTypeProvider<ZodTypeProvider>()
+app.setSerializerCompiler(serializerCompiler)
+app.setValidatorCompiler(validatorCompiler)
+app.setErrorHandler(errorHandler)
+
+// Allowlist de uma entrada: a origem em que o próprio web é servido (em dev,
+// `WEB_URL` aponta para o Vite). Era `origin: true`, que reflete qualquer
+// site. `credentials` é só para o cookie `httpOnly` do refresh token
+// (`routes/auth/session-cookie.ts`), que vive em `/sessions`; o resto da API
+// segue autenticado pelo header `Authorization`.
+app.register(fastifyCors, {
+  origin: (origin, callback) =>
+    callback(null, isAllowedOrigin(origin, env.WEB_URL)),
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Authorization', 'Content-Type'],
+})
+
+app.register(fastifyCookie)
+
+app.register(fastifyJwt, {
+  secret: env.JWT_SECRET,
+})
+
+// Antes das rotas: o limitador precisa do escopo raiz para alcançar todas.
+app.register(rateLimiter)
+
+const swaggerOptions: FastifyDynamicSwaggerOptions = {
+  openapi: {
+    info: {
+      title: 'Api Documentation - myFinances',
+      description: 'API documentation - myFinances',
+      version: '1.0.0',
+    },
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
+  },
+  transform:
+    swaggerSchemaTransform as unknown as FastifyDynamicSwaggerOptions['transform'],
+  transformObject:
+    swaggerTransformObject as unknown as FastifyDynamicSwaggerOptions['transformObject'],
+}
+
+// Só quando pedido — ver `docs-enabled.ts` em `@myfinances/env`. O
+// `fastifySwagger` entra junto: sozinho ele não serve rota, mas percorre e
+// guarda o schema de tudo, e não há motivo para pagar isso quando ninguém vai
+// ler. Antes das rotas, para o swagger enxergá-las.
+if (env.API_DOCS_ENABLED) {
+  app.register(fastifySwagger, swaggerOptions)
+
+  app.register(fastifySwaggerUi, {
+    routePrefix: '/docs',
+  })
+}
+
+app.register(auth)
+
+app.register(health)
+app.register(createUser)
+app.register(authenticateWithPassword)
+app.register(refreshSession)
+app.register(logout)
+app.register(getProfile)
+
+async function start() {
+  try {
+    await checkDatabaseConnection()
+  } catch (error) {
+    console.error(`\n❌ ${(error as Error).message}\n`)
+    process.exit(1)
+  }
+
+  await app.listen({ port: env.PORT, host: '0.0.0.0' })
+  console.log(`Server is running on http://0.0.0.0:${env.PORT}`)
+}
+
+start()

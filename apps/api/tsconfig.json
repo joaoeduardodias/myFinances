@@ -1,0 +1,11 @@
+{
+  "extends": "@myfinances/ts-config/node.json",
+  "include": ["src/**/*", "@types/*.d.ts", "prisma.config.ts"],
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
+}
