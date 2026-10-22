@@ -12,3 +12,10 @@ window.matchMedia ??= ((query: string) => ({
   removeListener: () => {},
   dispatchEvent: () => false,
 })) as unknown as typeof window.matchMedia
+
+// jsdom não tem ResizeObserver, que o ResponsiveContainer do recharts usa.
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}

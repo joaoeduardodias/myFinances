@@ -1,3 +1,250 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Download, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { toast } from 'sonner'
+
+import { PayslipLinesEditor } from '@/components/payslip-lines-editor'
+import { PayslipStatusBadge } from '@/components/payslip-status-badge'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { getApiErrorMessage } from '@/http/get-api-error-message'
+import {
+  deletePayslip,
+  getPayslip,
+  getPayslipFileUrl,
+  PAYSLIP_TYPE_LABELS,
+  type PayslipLine,
+} from '@/http/payslips'
+import { formatBRL, formatDate } from '@/lib/format'
+import { formatCompetence } from '@/lib/payslip'
+
+function LinesTable({ title, lines }: { title: string; lines: PayslipLine[] }) {
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-base font-medium">{title}</h2>
+      {lines.length === 0 ? (
+        <p className="text-muted-foreground text-sm">Nenhum lançamento.</p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Descrição</TableHead>
+              <TableHead>Referência</TableHead>
+              <TableHead className="text-right">Valor</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {lines.map((l) => (
+              <TableRow key={l.id}>
+                <TableCell>{l.description}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {l.reference ?? '—'}
+                </TableCell>
+                <TableCell className="text-right">
+                  {formatBRL(l.amountCents)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </section>
+  )
+}
+
 export function PayslipDetail() {
-  return <h1 className="p-6 text-xl font-semibold">Holerite</h1>
+  const { id = '' } = useParams()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  const { data, isPending, isError, refetch } = useQuery({
+    queryKey: ['payslip', id],
+    queryFn: () => getPayslip(id),
+  })
+
+  const download = useMutation({
+    mutationFn: () => getPayslipFileUrl(id),
+    onSuccess: (url) => window.open(url, '_blank', 'noopener'),
+    onError: async (error) =>
+      toast.error(
+        await getApiErrorMessage(
+          error,
+          'Não foi possível baixar o PDF. Tente novamente.',
+        ),
+      ),
+  })
+
+  const remove = useMutation({
+    mutationFn: () => deletePayslip(id),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['payslips'] }),
+        queryClient.removeQueries({ queryKey: ['payslip', id] }),
+      ])
+      navigate('/holerites')
+    },
+    onError: async (error) =>
+      toast.error(
+        await getApiErrorMessage(
+          error,
+          'Não foi possível excluir. Tente novamente.',
+        ),
+      ),
+  })
+
+  const payslip = data?.payslip
+  const editable = payslip?.status !== 'RECOGNIZED'
+
+  return (
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 sm:p-6">
+      <Link to="/holerites" className="text-muted-foreground text-sm underline">
+        Voltar para holerites
+      </Link>
+
+      {isPending && <Skeleton className="h-40" aria-busy="true" />}
+      {isError && (
+        <div
+          role="alert"
+          className="flex flex-col items-start gap-3 rounded-lg border p-4"
+        >
+          <p className="text-sm">Não foi possível carregar o holerite.</p>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            Tentar novamente
+          </Button>
+        </div>
+      )}
+
+      {data && payslip && (
+        <>
+          <header className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h1 className="text-xl font-semibold">
+                {`Holerite ${formatCompetence(payslip.competence)}`}
+              </h1>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={download.isPending}
+                  onClick={() => download.mutate()}
+                >
+                  <Download aria-hidden />
+                  Baixar PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  <Trash2 aria-hidden />
+                  Excluir
+                </Button>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span>{PAYSLIP_TYPE_LABELS[payslip.type]}</span>
+              <PayslipStatusBadge status={payslip.status} />
+              {payslip.status !== 'UNRECOGNIZED' &&
+                (data.reconciliation.matched &&
+                data.reconciliation.transaction ? (
+                  <Badge variant="outline" className="text-income">
+                    {`Líquido conferido com o depósito de ${formatDate(data.reconciliation.transaction.date)}`}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline">Depósito não encontrado</Badge>
+                ))}
+            </div>
+            <dl className="grid grid-cols-2 gap-4 rounded-lg border p-4 text-sm">
+              <div>
+                <dt className="text-muted-foreground">Bruto</dt>
+                <dd className="font-medium">
+                  {payslip.grossCents === null
+                    ? '—'
+                    : formatBRL(payslip.grossCents)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Líquido</dt>
+                <dd className="font-medium">
+                  {payslip.netCents === null
+                    ? '—'
+                    : formatBRL(payslip.netCents)}
+                </dd>
+              </div>
+            </dl>
+          </header>
+
+          {editable ? (
+            <section className="flex flex-col gap-4">
+              {payslip.status === 'UNRECOGNIZED' && (
+                <p
+                  role="status"
+                  className="bg-muted text-muted-foreground rounded-lg border p-4 text-sm"
+                >
+                  Ainda não sabemos ler este layout — lance os valores abaixo
+                </p>
+              )}
+              <PayslipLinesEditor
+                key={`${payslip.id}-${payslip.status}-${data.lines.length}`}
+                payslipId={payslip.id}
+                grossCents={payslip.grossCents}
+                netCents={payslip.netCents}
+                lines={data.lines}
+              />
+            </section>
+          ) : (
+            <>
+              <LinesTable
+                title="Proventos"
+                lines={data.lines.filter((l) => l.kind === 'EARNING')}
+              />
+              <LinesTable
+                title="Descontos"
+                lines={data.lines.filter((l) => l.kind === 'DEDUCTION')}
+              />
+            </>
+          )}
+        </>
+      )}
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir este holerite?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O arquivo e os valores lançados serão removidos. Esta ação não
+              pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => remove.mutate()}>
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
 }
