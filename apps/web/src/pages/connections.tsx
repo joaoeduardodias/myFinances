@@ -36,7 +36,7 @@ import {
 } from '@/http/connections'
 import { getApiErrorMessage } from '@/http/get-api-error-message'
 import { getErrorStatus } from '@/http/get-error-status'
-import { formatDate } from '@/lib/format'
+import { formatDateTimeToDate } from '@/lib/format'
 import { zodResolver } from '@/lib/zod-resolver'
 
 const DAY_MS = 86_400_000
@@ -205,7 +205,7 @@ function ConnectionItem({
           >
             {expiresSoon && <TriangleAlert className="size-4" aria-hidden />}
             <span className={expiresSoon ? 'text-destructive' : undefined}>
-              {`Autorização vence em ${formatDate(expiresAt)}`}
+              {`Autorização vence em ${formatDateTimeToDate(expiresAt)}`}
             </span>
           </p>
         )}
@@ -309,16 +309,18 @@ export function Connections() {
               {`Remover ${toRemove?.connectorName ?? 'conexão'}?`}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              A conexão deixa de ser sincronizada. Esta ação não pode ser
-              desfeita.
+              Isto apaga as contas deste banco, todas as transações delas, as
+              faturas do cartão e as recorrentes dessas contas. Esta ação não
+              pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
+              variant="destructive"
               onClick={() => toRemove && remove.mutate(toRemove.id)}
             >
-              Remover
+              Remover e apagar dados
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

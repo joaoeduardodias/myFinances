@@ -36,7 +36,7 @@ const conn: Connection = {
   id: 'c1',
   connectorName: 'Nubank',
   status: 'UPDATED',
-  consentExpiresAt: '2099-01-10T00:00:00.000Z',
+  consentExpiresAt: '2099-01-10T12:00:00.000Z',
   lastSyncedAt: '2026-10-21T12:00:00.000Z',
   lastError: null,
 }
@@ -84,6 +84,13 @@ describe('Connections', () => {
     renderPage([{ ...conn, lastError: 'Connection timed out' }])
     expect(await screen.findByText('Último erro:')).toBeInTheDocument()
     expect(screen.getByText('Connection timed out')).toBeInTheDocument()
+  })
+
+  it('shows the consent date in São Paulo', async () => {
+    renderPage([{ ...conn, consentExpiresAt: '2099-01-10T02:00:00.000Z' }])
+    expect(
+      await screen.findByText('Autorização vence em 09/01/2099'),
+    ).toBeInTheDocument()
   })
 
   it('warns when consent expires in less than 30 days', async () => {
@@ -161,8 +168,13 @@ describe('Connections', () => {
     )
     expect(deleteConnection).not.toHaveBeenCalled()
     const dialog = await screen.findByRole('alertdialog')
-    expect(dialog).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Remover' }))
+    // Remover apaga dados: o diálogo diz quais, e que não tem volta.
+    expect(dialog).toHaveTextContent(
+      'Isto apaga as contas deste banco, todas as transações delas, as faturas do cartão e as recorrentes dessas contas. Esta ação não pode ser desfeita.',
+    )
+    await user.click(
+      screen.getByRole('button', { name: 'Remover e apagar dados' }),
+    )
     await waitFor(() => expect(deleteConnection).toHaveBeenCalledWith('c1'))
   })
 })
