@@ -25,6 +25,7 @@ import { createUser } from './routes/auth/create-user'
 import { getProfile } from './routes/auth/get-profile'
 import { logout } from './routes/auth/logout'
 import { refreshSession } from './routes/auth/refresh-session'
+import { getCategories } from './routes/categories/get-categories'
 import { createConnection } from './routes/connections/create-connection'
 import { deleteConnection } from './routes/connections/delete-connection'
 import { getConnections } from './routes/connections/get-connections'
@@ -35,6 +36,11 @@ import { createRecurrence } from './routes/recurrences/create-recurrence'
 import { dismissRecurrence } from './routes/recurrences/dismiss-recurrence'
 import { getRecurrences } from './routes/recurrences/get-recurrences'
 import { updateRecurrence } from './routes/recurrences/update-recurrence'
+import { createManualTransaction } from './routes/transactions/create-manual-transaction'
+import { deleteManualTransaction } from './routes/transactions/delete-manual-transaction'
+import { getTransactions } from './routes/transactions/get-transactions'
+import { updateTransactionCategory } from './routes/transactions/update-transaction-category'
+import { updateTransactionTransfer } from './routes/transactions/update-transaction-transfer'
 import { registerPluggyWebhook } from './routes/webhooks/pluggy-webhook'
 import { swaggerSchemaTransform, swaggerTransformObject } from './swagger'
 import { trustProxy } from './trusted-proxy'
@@ -129,6 +135,12 @@ app.register(getRecurrences)
 app.register(createRecurrence)
 app.register(updateRecurrence)
 app.register(dismissRecurrence)
+app.register(getTransactions)
+app.register(updateTransactionCategory)
+app.register(updateTransactionTransfer)
+app.register(createManualTransaction)
+app.register(deleteManualTransaction)
+app.register(getCategories)
 // Sem `PLUGGY_WEBHOOK_SECRET` a rota nem existe: um webhook sem segredo seria
 // um endpoint aberto que dispara sincronizações.
 registerPluggyWebhook(app, env.PLUGGY_WEBHOOK_SECRET)
