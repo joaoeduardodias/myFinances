@@ -28,6 +28,10 @@ const fastifyClientErrorMessage: Record<string, string> = {
   FST_ERR_CTP_INVALID_JSON_BODY: 'Os dados enviados estão em formato inválido.',
   FST_ERR_CTP_EMPTY_JSON_BODY: 'A requisição chegou sem dados.',
   FST_ERR_CTP_INVALID_MEDIA_TYPE: 'Formato de envio não suportado.',
+  // Do `@fastify/multipart`: o limite é o `MAX_PAYSLIP_BYTES` do storage.
+  FST_REQ_FILE_TOO_LARGE: 'O arquivo passa de 5 MB',
+  FST_FILES_LIMIT: 'Envie um arquivo por vez.',
+  FST_INVALID_MULTIPART_CONTENT_TYPE: 'Envie o arquivo como formulário (multipart/form-data).',
 }
 
 /** Human-readable label (pt-BR) for where invalid data came from. */

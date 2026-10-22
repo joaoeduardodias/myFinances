@@ -171,6 +171,18 @@ describe('error handler — client errors in Portuguese', () => {
     )
   })
 
+  it('answers a multipart file over the limit with 413 and the size in Portuguese', async () => {
+    // Como o `@fastify/multipart` lança o `RequestFileTooLargeError`.
+    const tooLarge = Object.assign(new Error('request file too large'), {
+      code: 'FST_REQ_FILE_TOO_LARGE',
+      statusCode: 413,
+    })
+    const { statusCode, body } = await requestBoom(tooLarge)
+
+    expect(statusCode).toBe(413)
+    expect(body.message).toBe('O arquivo passa de 5 MB')
+  })
+
   it('answers malformed JSON with 400 and a Portuguese message', async () => {
     const app = await buildTestApp(async (app) => {
       app.post('/upload', async () => ({}))

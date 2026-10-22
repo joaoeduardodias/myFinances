@@ -1,6 +1,7 @@
 import fastifyCookie from '@fastify/cookie'
 import fastifyCors from '@fastify/cors'
 import fastifyJwt from '@fastify/jwt'
+import fastifyMultipart from '@fastify/multipart'
 import type { FastifyDynamicSwaggerOptions } from '@fastify/swagger'
 import fastifySwagger from '@fastify/swagger'
 import fastifySwaggerUi from '@fastify/swagger-ui'
@@ -19,6 +20,7 @@ import { isAllowedOrigin } from './cors'
 import { errorHandler } from './error-handler'
 import { auth } from './middlewares/auth'
 import { rateLimiter } from './middlewares/rate-limit'
+import { multipartOptions } from './multipart'
 import { getAccounts } from './routes/accounts/get-accounts'
 import { authenticateWithPassword } from './routes/auth/authenticate-with-password'
 import { createUser } from './routes/auth/create-user'
@@ -35,6 +37,12 @@ import { syncAll } from './routes/connections/sync-all'
 import { syncConnectionRoute } from './routes/connections/sync-connection'
 import { getDashboard } from './routes/dashboard/get-dashboard'
 import { health } from './routes/health/health'
+import { deletePayslip } from './routes/payslips/delete-payslip'
+import { getPayslip } from './routes/payslips/get-payslip'
+import { getPayslipFile } from './routes/payslips/get-payslip-file'
+import { getPayslips } from './routes/payslips/get-payslips'
+import { updatePayslipLines } from './routes/payslips/update-payslip-lines'
+import { uploadPayslip } from './routes/payslips/upload-payslip'
 import { createRecurrence } from './routes/recurrences/create-recurrence'
 import { dismissRecurrence } from './routes/recurrences/dismiss-recurrence'
 import { getRecurrences } from './routes/recurrences/get-recurrences'
@@ -81,6 +89,8 @@ app.register(fastifyCookie)
 app.register(fastifyJwt, {
   secret: env.JWT_SECRET,
 })
+
+app.register(fastifyMultipart, multipartOptions)
 
 // Antes das rotas: o limitador precisa do escopo raiz para alcançar todas.
 app.register(rateLimiter)
@@ -147,6 +157,12 @@ app.register(getCategories)
 app.register(getCards)
 app.register(updateCardCycle)
 app.register(getDashboard)
+app.register(uploadPayslip)
+app.register(getPayslips)
+app.register(getPayslip)
+app.register(updatePayslipLines)
+app.register(getPayslipFile)
+app.register(deletePayslip)
 // Sem `PLUGGY_WEBHOOK_SECRET` a rota nem existe: um webhook sem segredo seria
 // um endpoint aberto que dispara sincronizações.
 registerPluggyWebhook(app, env.PLUGGY_WEBHOOK_SECRET)
