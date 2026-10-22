@@ -1,0 +1,29 @@
+services:
+  pg:
+    # Imagem oficial, e não a bitnami do controlPec: a Bitnami tirou as tags
+    # gratuitas do Docker Hub em 2025, então um ambiente novo não conseguiria
+    # baixar `bitnami/postgresql:latest`.
+    image: postgres:17-alpine
+    # Sem isto o container fica parado depois de todo restart do Docker/WSL e a
+    # API sobe apontando para uma porta que ninguém escuta.
+    restart: unless-stopped
+    # Amarrado ao loopback: sem o '127.0.0.1' o Docker publica em todas as
+    # interfaces e o banco de desenvolvimento, com a senha abaixo, fica
+    # alcançável pela rede local (no WSL2, pela LAN quando o Windows encaminha).
+    # 5435 para não colidir com o controlPec (5434).
+    ports:
+      - '127.0.0.1:5435:5432'
+    environment:
+      - POSTGRES_USER=docker
+      - POSTGRES_PASSWORD=docker
+      - POSTGRES_DB=myfinances
+    volumes:
+      # Volume nomeado, nunca anônimo: renomear a pasta do projeto não pode
+      # subir um Postgres vazio deixando o banco antigo órfão.
+      - pgdata:/var/lib/postgresql/data
+      # Cria o `myfinances_test` da suíte de integração. Só roda quando o
+      # volume está vazio (primeira subida).
+      - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+
+volumes:
+  pgdata:

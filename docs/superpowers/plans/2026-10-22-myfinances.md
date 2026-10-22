@@ -96,8 +96,7 @@ myfinances/
   - Nome `myfinances`.
   - No `turbo.json`, `build.env` fica `["DATABASE_URL", "VITE_*"]`, sem `SEO_NOINDEX`.
   - No `.gitignore`, tire as linhas de .NET, `.vs` e security-audit e acrescente `samples/`.
-- [ ] **Step 2: `docker-compose.yml`.** Use o do `controlPec`, com os comentários, mas com porta `'127.0.0.1:5435:5432'` e `POSTGRES_DB=myfinances`.
-  - Crie também o banco `myfinances_test`, por um script em `docker/init-test-db.sql` montado em `/docker-entrypoint-initdb.d/` (o bitnami executa esse diretório).
+- [ ] **Step 2: `docker-compose.yml` — já feito.** `docker-compose.yml` e `docker/init-test-db.sql` já existem: imagem oficial `postgres:17-alpine` (não a bitnami, que saiu do Docker Hub), porta `127.0.0.1:5435`, bancos `myfinances` e `myfinances_test`, usuário/senha `docker`. Só confira que `docker compose ps` mostra `pg` rodando.
 - [ ] **Step 3: Portar `config/*`** com nomes `@myfinances/eslint-config`, `@myfinances/prettier` e `@myfinances/ts-config`. Tire a dependência `@casl/ability` do ts-config.
 - [ ] **Step 4: Escrever `packages/env/index.test.ts`**, portando os testes de `jwt-secret` e `docs-enabled` do `controlPec`. Acrescente:
 
