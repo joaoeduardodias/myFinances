@@ -21,3 +21,4 @@ playwright-report/
 
 # Amostras locais (extratos, exports) que não vão para o git
 samples/
+*.tsbuildinfo
