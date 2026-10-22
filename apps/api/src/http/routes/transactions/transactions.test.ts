@@ -164,6 +164,7 @@ describe('PATCH /transactions/:id/transfer', () => {
     prismaMock.transaction.findFirst
       .mockResolvedValueOnce({ id: txId, transferPairId: pairId })
       .mockResolvedValueOnce(null)
+    prismaMock.transaction.findMany.mockResolvedValue([])
 
     const res = await call(updateTransactionTransfer, {
       method: 'PATCH',
@@ -175,6 +176,35 @@ describe('PATCH /transactions/:id/transfer', () => {
     const args = prismaMock.transaction.updateMany.mock.calls[0][0]
     expect(args.where.id.in.sort()).toEqual([txId, pairId].sort())
     expect(args.data).toEqual({ isTransfer: false, transferLocked: true, transferPairId: null })
+  })
+
+  it('desmarcar um saque apaga o crédito SYSTEM da Carteira e recalcula o saldo', async () => {
+    prismaMock.transaction.findFirst
+      .mockResolvedValueOnce({ id: txId, transferPairId: pairId })
+      .mockResolvedValueOnce({ id: pairId })
+    prismaMock.transaction.findMany.mockResolvedValue([{ id: pairId, accountId: walletId }])
+    prismaMock.transaction.aggregate.mockResolvedValue({ _sum: { amountCents: 0 } })
+
+    const res = await call(updateTransactionTransfer, {
+      method: 'PATCH',
+      url: `/transactions/${txId}/transfer`,
+      body: { isTransfer: false },
+    })
+
+    expect(res.statusCode).toBe(204)
+    expect(prismaMock.transaction.findMany.mock.calls[0][0].where).toEqual({
+      id: { in: [txId, pairId] },
+      userId: userA,
+      source: 'SYSTEM',
+    })
+    expect(prismaMock.transaction.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [pairId] }, userId: userA },
+    })
+    expect(prismaMock.transaction.updateMany.mock.calls[0][0].where.id.in).toEqual([txId])
+    expect(prismaMock.account.update).toHaveBeenCalledWith({
+      where: { id: walletId },
+      data: { balanceCents: 0 },
+    })
   })
 
   it('o outro lado do par (que aponta para a transação) também é atualizado', async () => {

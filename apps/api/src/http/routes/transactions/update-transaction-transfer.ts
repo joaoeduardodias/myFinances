@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 import { auth } from '@/http/middlewares/auth'
 import { prisma } from '@/lib/prisma'
+import { recomputeWalletBalance } from '@/services/wallet'
 
 import { NotFoundError } from '../_errors/not-found-error'
 
@@ -40,18 +41,39 @@ export async function updateTransactionTransfer(app: FastifyInstance) {
           select: { id: true },
           where: { transferPairId: id, userId },
         })
-        const ids = [id, tx.transferPairId, pointingAtTx?.id].filter(
-          (value): value is string => Boolean(value),
-        )
+        const ids = [
+          ...new Set(
+            [id, tx.transferPairId, pointingAtTx?.id].filter((value): value is string => Boolean(value)),
+          ),
+        ]
+
+        // O crédito que um saque gerou na Carteira só existe por causa do par:
+        // desfeito o par, ele sai e o saldo da Carteira volta.
+        const walletCredits = isTransfer
+          ? []
+          : await prisma.transaction.findMany({
+              select: { id: true, accountId: true },
+              where: { id: { in: ids }, userId, source: 'SYSTEM' },
+            })
+        const creditIds = new Set(walletCredits.map((credit) => credit.id))
+        const remainingIds = ids.filter((value) => !creditIds.has(value))
 
         await prisma.$transaction(async (db) => {
-          await db.transaction.updateMany({
-            where: { id: { in: ids }, userId },
-            data: isTransfer
-              ? { isTransfer: true, transferLocked: true }
-              : { isTransfer: false, transferLocked: true, transferPairId: null },
-          })
+          if (creditIds.size > 0) {
+            await db.transaction.deleteMany({ where: { id: { in: [...creditIds] }, userId } })
+          }
+          if (remainingIds.length > 0) {
+            await db.transaction.updateMany({
+              where: { id: { in: remainingIds }, userId },
+              data: isTransfer
+                ? { isTransfer: true, transferLocked: true }
+                : { isTransfer: false, transferLocked: true, transferPairId: null },
+            })
+          }
         })
+        for (const walletId of new Set(walletCredits.map((credit) => credit.accountId))) {
+          await recomputeWalletBalance(walletId)
+        }
 
         return reply.status(204).send(null)
       },
