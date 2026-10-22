@@ -27,11 +27,32 @@ function readStoredTheme(): Theme {
   return DEFAULT_THEME
 }
 
+// As mesmas cores das metas do index.html (fundo de cada tema).
+const THEME_COLORS = { light: '#ffffff', dark: '#09090b' }
+
+/**
+ * O index.html traz uma meta por esquema do sistema, para antes do React. O
+ * tema escolhido pode não ser o do sistema: fica uma meta só, sem `media`,
+ * com a cor do tema ativo.
+ */
+function applyThemeColor(isDark: boolean) {
+  const [meta, ...extra] = document.querySelectorAll<HTMLMetaElement>(
+    'meta[name="theme-color"]',
+  )
+  extra.forEach((m) => m.remove())
+  const target =
+    meta ?? document.head.appendChild(document.createElement('meta'))
+  target.name = 'theme-color'
+  target.removeAttribute('media')
+  target.content = isDark ? THEME_COLORS.dark : THEME_COLORS.light
+}
+
 function applyTheme(theme: Theme) {
   const isDark =
     theme === 'dark' ||
     (theme === 'system' && window.matchMedia(DARK_QUERY).matches)
   document.documentElement.classList.toggle('dark', isDark)
+  applyThemeColor(isDark)
 }
 
 interface ThemeContextValue {

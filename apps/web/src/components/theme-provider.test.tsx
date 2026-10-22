@@ -67,3 +67,42 @@ describe('ThemeProvider', () => {
     expect(document.documentElement).toHaveClass('dark')
   })
 })
+
+describe('theme-color', () => {
+  // Como o index.html chega: uma por esquema do sistema.
+  beforeEach(() => {
+    document.head.innerHTML =
+      '<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />' +
+      '<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#09090b" />'
+  })
+
+  function themeColors() {
+    return [...document.querySelectorAll('meta[name="theme-color"]')].map(
+      (meta) => [meta.getAttribute('media'), meta.getAttribute('content')],
+    )
+  }
+
+  it('leaves a single meta with the active theme color', async () => {
+    const user = userEvent.setup()
+    renderToggle()
+    expect(themeColors()).toEqual([[null, '#09090b']])
+
+    await user.click(screen.getByRole('button', { name: 'Alterar tema' }))
+    await user.click(screen.getByRole('menuitemradio', { name: /Claro/ }))
+
+    expect(themeColors()).toEqual([[null, '#ffffff']])
+  })
+
+  it('follows the system on system', () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'system')
+    renderToggle()
+    expect(themeColors()).toEqual([[null, '#ffffff']])
+
+    act(() => {
+      systemDark = true
+      listeners.forEach((l) => l())
+    })
+
+    expect(themeColors()).toEqual([[null, '#09090b']])
+  })
+})
