@@ -211,6 +211,21 @@ describe('isolamento entre usuários', () => {
       expect(res.json()[key]).toHaveLength(1)
     })
 
+    it('GET /accounts de A inclui as contas dele', async () => {
+      const tokenA = await signToken(app, { sub: userAId })
+      const res = await app.inject({ method: 'GET', url: '/accounts', headers: authHeaders(tokenA) })
+      expect(res.statusCode).toBe(200)
+      const ids = res.json().accounts.map((a: { id: string }) => a.id)
+      expect(ids).toEqual(expect.arrayContaining([bankId, cardId]))
+    })
+
+    it('GET /dashboard de A tem o saldo da conta dele', async () => {
+      const tokenA = await signToken(app, { sub: userAId })
+      const res = await app.inject({ method: 'GET', url: '/dashboard', headers: authHeaders(tokenA) })
+      expect(res.statusCode).toBe(200)
+      expect(res.json().balanceCents).toBe(500_000)
+    })
+
     it('GET /payslips/:id e /file respondem 200 para A', async () => {
       const headers = authHeaders(await signToken(app, { sub: userAId }))
       for (const url of [`/payslips/${payslipId}`, `/payslips/${payslipId}/file`]) {
@@ -335,24 +350,37 @@ describe('isolamento entre usuários', () => {
     expect(dismissed.statusCode).toBe(204)
 
     // Histórico que qualifica como recorrência: mesmo lançamento, 3 meses, valor e dia estáveis.
+    // Controle positivo: a mesma história sob outra descrição, sem linha de
+    // Recurrence, tem de ser sugerida. Sem isso, `created === 0` valeria também
+    // se o histórico semeado não qualificasse.
     await prisma.transaction.createMany({
-      data: [1, 2, 3].map((months) => ({
-        userId: userAId,
-        accountId: bankId,
-        date: toDbDate(isoMonthsAgo(months)),
-        description: 'Aluguel A',
-        descriptionKey: 'aluguel a',
-        amountCents: -150_000,
-        status: 'POSTED' as const,
-        source: 'MANUAL' as const,
-      })),
+      data: [
+        ['Aluguel A', 'aluguel a', -150_000],
+        ['Internet A', 'internet a', -10_000],
+      ].flatMap(([description, descriptionKey, amountCents]) =>
+        [1, 2, 3].map((months) => ({
+          userId: userAId,
+          accountId: bankId,
+          date: toDbDate(isoMonthsAgo(months)),
+          description: description as string,
+          descriptionKey: descriptionKey as string,
+          amountCents: amountCents as number,
+          status: 'POSTED' as const,
+          source: 'MANUAL' as const,
+        })),
+      ),
     })
 
     const created = await detectAndStoreRecurrences(userAId)
 
-    expect(created).toBe(0)
+    expect(created).toBe(1)
     const rows = await prisma.recurrence.findMany({ where: { userId: userAId } })
-    expect(rows).toHaveLength(1)
-    expect(rows[0]).toMatchObject({ id: recurrenceId, status: 'DISMISSED' })
+    expect(rows).toHaveLength(2)
+    expect(rows.filter((r) => r.descriptionKey === 'aluguel a')).toEqual([
+      expect.objectContaining({ id: recurrenceId, status: 'DISMISSED' }),
+    ])
+    expect(rows.find((r) => r.descriptionKey === 'internet a')).toMatchObject({
+      status: 'SUGGESTED',
+    })
   })
 })
