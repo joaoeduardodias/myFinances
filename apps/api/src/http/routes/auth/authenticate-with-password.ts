@@ -27,7 +27,7 @@ export async function authenticateWithPassword(app: FastifyInstance) {
           // senha. Exigi-la aqui trancaria para fora quem já tem senha curta,
           // e recusaria antes do `compare` — o que também é um oráculo de
           // qual formato de senha a conta usa.
-          password: z.string().min(1, 'Password is required'),
+          password: z.string().min(1, 'Informe a senha.'),
         }),
         response: {
           201: z.object({

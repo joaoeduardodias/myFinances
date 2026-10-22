@@ -11,7 +11,7 @@
     "test:watch": "pnpm db:generate && pnpm env:load vitest",
     "test:integration": "pnpm db:generate && pnpm env:load:e2e vitest run --config vitest.integration.config.ts",
     "start": "pnpm env:load node dist/http/server.js",
-    "db:migrate": "pnpm env:load prisma migrate dev && pnpm db:generate",
+    "db:migrate": "pnpm env:load prisma migrate dev",
     "db:migrate:deploy": "pnpm env:load prisma migrate deploy",
     "db:studio": "pnpm env:load prisma studio",
     "db:generate": "pnpm env:load prisma generate",
@@ -20,7 +20,8 @@
     "env:load": "dotenv -e ../../.env --",
     "env:load:e2e": "dotenv -e ../../.env.e2e -e ../../.env --",
     "dev:e2e": "pnpm db:generate && pnpm env:load:e2e tsx watch src/http/server.ts",
-    "pluggy:webhook": "pnpm env:load tsx src/scripts/register-pluggy-webhook.ts"
+    "pluggy:webhook": "pnpm env:load tsx src/scripts/register-pluggy-webhook.ts",
+    "postdb:migrate": "pnpm db:generate"
   },
   "dependencies": {
     "@myfinances/env": "workspace:*",

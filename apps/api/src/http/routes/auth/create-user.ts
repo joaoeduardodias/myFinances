@@ -22,11 +22,11 @@ export async function createUser(app: FastifyInstance) {
         summary: 'Create user.',
         operationId: 'createUser',
         body: z.object({
-          name: z.string().min(1, 'Name is required'),
+          name: z.string().min(1, 'Informe o nome.'),
           email: emailSchema,
           password: z
             .string()
-            .min(8, 'Password must be at least 8 characters long'),
+            .min(8, 'A senha deve ter pelo menos 8 caracteres.'),
         }),
         response: {
           201: z.object({ token: z.string() }),

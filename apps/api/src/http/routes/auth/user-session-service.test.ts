@@ -107,7 +107,7 @@ describe('user session service', () => {
     await service.logout(issued.refreshToken)
 
     await expect(service.refresh(issued.refreshToken)).rejects.toThrow(
-      'Session has been revoked.',
+      'Sessão revogada. Entre novamente.',
     )
   })
 

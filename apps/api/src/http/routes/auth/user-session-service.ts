@@ -39,8 +39,8 @@ export class UserSessionError extends Error {}
 
 const MESSAGES = {
   invalid: 'Sessão expirada. Entre novamente.',
-  revoked: 'Session has been revoked.',
-  expired: 'Session has expired.',
+  revoked: 'Sessão revogada. Entre novamente.',
+  expired: 'Sessão expirada. Entre novamente.',
 }
 
 export function createUserSessionService(
