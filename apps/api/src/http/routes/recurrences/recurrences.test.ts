@@ -207,19 +207,19 @@ describe('PATCH /recurrences/:id', () => {
     })
   })
 
-  it('recalcula a chave ao mudar a descrição', async () => {
+  it('renomear muda só o rótulo, sem tocar na descriptionKey', async () => {
     prismaMock.recurrence.findFirst.mockResolvedValue(row)
     prismaMock.recurrence.update.mockResolvedValue(row)
 
-    await call(updateRecurrence, {
+    const response = await call(updateRecurrence, {
       method: 'PATCH',
       url: `/recurrences/${recurrenceId}`,
       body: { description: 'Netflix Premium' },
     })
 
+    expect(response.statusCode).toBe(200)
     expect(prismaMock.recurrence.update.mock.calls[0][0].data).toEqual({
       description: 'Netflix Premium',
-      descriptionKey: 'netflix premium',
     })
   })
 
@@ -236,21 +236,16 @@ describe('PATCH /recurrences/:id', () => {
     expect(prismaMock.recurrence.update).not.toHaveBeenCalled()
   })
 
-  it('responde 404 ao trocar para conta de outro usuário', async () => {
-    prismaMock.recurrence.findFirst.mockResolvedValue(row)
-    prismaMock.account.findFirst.mockResolvedValue(null)
-
-    const response = await call(updateRecurrence, {
-      method: 'PATCH',
-      url: `/recurrences/${recurrenceId}`,
-      body: { accountId: otherAccountId },
-    })
-
-    expect(response.statusCode).toBe(404)
-    expect(prismaMock.account.findFirst.mock.calls[0][0].where).toEqual({
-      id: otherAccountId,
-      userId: userA,
-    })
+  it('recusa trocar conta ou sentido, que são a identidade da recorrência', async () => {
+    for (const body of [{ accountId: otherAccountId }, { direction: 'IN' }]) {
+      const response = await call(updateRecurrence, {
+        method: 'PATCH',
+        url: `/recurrences/${recurrenceId}`,
+        body,
+      })
+      expect(response.statusCode).toBe(400)
+    }
+    expect(prismaMock.recurrence.findFirst).not.toHaveBeenCalled()
     expect(prismaMock.recurrence.update).not.toHaveBeenCalled()
   })
 

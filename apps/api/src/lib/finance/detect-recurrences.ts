@@ -29,7 +29,7 @@ type KnownRecurrence = {
   direction: RecurrenceDirection
 }
 
-const WINDOW_DAYS = 180
+export const WINDOW_DAYS = 180
 const MIN_MONTHS = 3
 const AMOUNT_TOLERANCE = 0.1
 const MAX_DAY_SPREAD = 6

@@ -3,13 +3,11 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 
 import { auth } from '@/http/middlewares/auth'
-import { descriptionKey } from '@/lib/finance/description-key'
 import { prisma } from '@/lib/prisma'
 
 import { NotFoundError } from '../_errors/not-found-error'
 import {
   assertDayValue,
-  assertDescriptionKey,
   recurrenceFields,
   recurrenceSchema,
   recurrenceSelect,
@@ -28,8 +26,18 @@ export async function updateRecurrence(app: FastifyInstance) {
           operationId: 'updateRecurrence',
           security: [{ bearerAuth: [] }],
           params: z.object({ id: z.uuid() }),
+          // Sem `accountId` nem `direction`, e `description` é só rótulo: conta,
+          // `descriptionKey` e sentido são a identidade que impede a detecção de
+          // ressuscitar o que foi descartado.
           body: z
-            .object({ ...recurrenceFields, status: z.literal('CONFIRMED') })
+            .strictObject({
+              description: recurrenceFields.description,
+              expectedAmountCents: recurrenceFields.expectedAmountCents,
+              dayRule: recurrenceFields.dayRule,
+              dayValue: recurrenceFields.dayValue,
+              nonBusinessDayPolicy: recurrenceFields.nonBusinessDayPolicy,
+              status: z.literal('CONFIRMED'),
+            })
             .partial(),
           response: { 200: z.object({ recurrence: recurrenceSchema }) },
         },
@@ -48,24 +56,10 @@ export async function updateRecurrence(app: FastifyInstance) {
         // A regra e o dia podem chegar separados; valida o par que vai ficar gravado.
         assertDayValue(body.dayRule ?? current.dayRule, body.dayValue ?? current.dayValue)
 
-        const data: typeof body & { descriptionKey?: string } = { ...body }
-        if (body.description !== undefined) {
-          data.descriptionKey = descriptionKey(body.description)
-          assertDescriptionKey(data.descriptionKey)
-        }
-
-        if (body.accountId !== undefined) {
-          const account = await prisma.account.findFirst({
-            select: { id: true },
-            where: { id: body.accountId, userId },
-          })
-          if (!account) throw new NotFoundError('Conta não encontrada.')
-        }
-
         const recurrence = await prisma.recurrence.update({
           select: recurrenceSelect,
           where: { id },
-          data,
+          data: body,
         })
         return reply.send({ recurrence })
       },

@@ -1,9 +1,7 @@
 import { addDays } from '@/lib/finance/business-days'
-import { detectRecurrenceCandidates } from '@/lib/finance/detect-recurrences'
+import { detectRecurrenceCandidates, WINDOW_DAYS } from '@/lib/finance/detect-recurrences'
 import { prisma } from '@/lib/prisma'
 import { type IsoDate, todayIso } from '@/lib/today'
-
-const WINDOW_DAYS = 180
 
 function toDbDate(date: IsoDate): Date {
   return new Date(`${date}T00:00:00Z`)
