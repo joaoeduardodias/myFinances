@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+    // `composite` obriga a emitir; sem `outDir`, o `tsc -b` cospe
+    // `vite.config.js` ao lado do `.ts` e o Vite o resolve antes do fonte.
+    "outDir": "./node_modules/.tmp/node-build",
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "strict": true,
+    "types": ["vitest"]
+  },
+  "include": ["vite.config.ts"]
+}
