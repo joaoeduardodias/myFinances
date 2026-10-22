@@ -19,11 +19,17 @@ import { isAllowedOrigin } from './cors'
 import { errorHandler } from './error-handler'
 import { auth } from './middlewares/auth'
 import { rateLimiter } from './middlewares/rate-limit'
+import { getAccounts } from './routes/accounts/get-accounts'
 import { authenticateWithPassword } from './routes/auth/authenticate-with-password'
 import { createUser } from './routes/auth/create-user'
 import { getProfile } from './routes/auth/get-profile'
 import { logout } from './routes/auth/logout'
 import { refreshSession } from './routes/auth/refresh-session'
+import { createConnection } from './routes/connections/create-connection'
+import { deleteConnection } from './routes/connections/delete-connection'
+import { getConnections } from './routes/connections/get-connections'
+import { syncAll } from './routes/connections/sync-all'
+import { syncConnectionRoute } from './routes/connections/sync-connection'
 import { health } from './routes/health/health'
 import { swaggerSchemaTransform, swaggerTransformObject } from './swagger'
 import { trustProxy } from './trusted-proxy'
@@ -108,6 +114,12 @@ app.register(authenticateWithPassword)
 app.register(refreshSession)
 app.register(logout)
 app.register(getProfile)
+app.register(createConnection)
+app.register(getConnections)
+app.register(deleteConnection)
+app.register(syncConnectionRoute)
+app.register(syncAll)
+app.register(getAccounts)
 
 async function start() {
   try {

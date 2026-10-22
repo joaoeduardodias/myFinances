@@ -74,6 +74,7 @@ export function resetPrismaMocks(prisma: unknown) {
 export function makePrismaMock() {
   const model = () => ({
     findUnique: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     findFirst: vi.fn(),
     findMany: vi.fn(),
     create: vi.fn(),
