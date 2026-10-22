@@ -83,17 +83,32 @@ export function PayslipDetail() {
     queryFn: () => getPayslip(id),
   })
 
-  const download = useMutation({
+  // A aba nasce no clique, ainda dentro do gesto do usuário: aberta depois
+  // da resposta, o bloqueador de pop-up a barraria. `tab` é a variável da
+  // mutação; sem aba (bloqueada mesmo assim), o PDF abre nesta.
+  const download = useMutation<string, unknown, Window | null>({
     mutationFn: () => getPayslipFileUrl(id),
-    onSuccess: (url) => window.open(url, '_blank', 'noopener'),
-    onError: async (error) =>
+    onSuccess: (url, tab) => {
+      if (tab) tab.location.href = url
+      else window.location.assign(url)
+    },
+    onError: async (error, tab) => {
+      tab?.close()
       toast.error(
         await getApiErrorMessage(
           error,
           'Não foi possível baixar o PDF. Tente novamente.',
         ),
-      ),
+      )
+    },
   })
+
+  function openPdf() {
+    const tab = window.open('', '_blank')
+    // O mesmo que `noopener`: a aba do PDF não alcança esta.
+    if (tab) tab.opener = null
+    download.mutate(tab)
+  }
 
   const remove = useMutation({
     mutationFn: () => deletePayslip(id),
@@ -147,7 +162,7 @@ export function PayslipDetail() {
                   variant="outline"
                   size="sm"
                   disabled={download.isPending}
-                  onClick={() => download.mutate()}
+                  onClick={openPdf}
                 >
                   <Download aria-hidden />
                   Baixar PDF

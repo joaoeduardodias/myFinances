@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { toast } from 'sonner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -113,19 +114,46 @@ describe('PayslipDetail', () => {
     ).toBeInTheDocument()
   })
 
-  it('opens the PDF url', async () => {
+  // A aba abre no clique (ainda no gesto do usuário, senão o bloqueador de
+  // pop-up barra) e só recebe o endereço quando a API responde.
+  it('opens the tab on click and points it at the PDF url', async () => {
     const user = userEvent.setup()
-    const open = vi.spyOn(window, 'open').mockReturnValue(null)
-    vi.mocked(getPayslipFileUrl).mockResolvedValue('https://files/x.pdf')
+    const tab = {
+      location: { href: '' },
+      opener: {} as unknown,
+      close: vi.fn(),
+    }
+    const open = vi
+      .spyOn(window, 'open')
+      .mockReturnValue(tab as unknown as Window)
+    let resolveUrl!: (url: string) => void
+    vi.mocked(getPayslipFileUrl).mockReturnValue(
+      new Promise((resolve) => {
+        resolveUrl = resolve
+      }),
+    )
     renderPage(detail())
     await user.click(await screen.findByRole('button', { name: 'Baixar PDF' }))
-    await waitFor(() =>
-      expect(open).toHaveBeenCalledWith(
-        'https://files/x.pdf',
-        '_blank',
-        'noopener',
-      ),
-    )
+
+    expect(open).toHaveBeenCalledWith('', '_blank')
+    expect(tab.opener).toBeNull()
+    expect(tab.location.href).toBe('')
+
+    resolveUrl('https://files/x.pdf')
+    await waitFor(() => expect(tab.location.href).toBe('https://files/x.pdf'))
+    expect(tab.close).not.toHaveBeenCalled()
+  })
+
+  it('closes the tab when the url request fails', async () => {
+    const user = userEvent.setup()
+    const tab = { location: { href: '' }, opener: null, close: vi.fn() }
+    vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window)
+    vi.mocked(getPayslipFileUrl).mockRejectedValue(new Error('falhou'))
+    renderPage(detail())
+    await user.click(await screen.findByRole('button', { name: 'Baixar PDF' }))
+
+    await waitFor(() => expect(tab.close).toHaveBeenCalled())
+    expect(toast.error).toHaveBeenCalled()
   })
 
   it('sends the lines and net in cents from the editor', async () => {
