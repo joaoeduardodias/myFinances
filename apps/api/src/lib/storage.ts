@@ -54,12 +54,17 @@ export async function putFile(
  */
 function sanitizeDownloadName(name: string) {
   // eslint-disable-next-line no-control-regex
-  const cleaned = name.replace(/["\\\u0000-\u001f\u007f]/g, '').trim()
+  const cleaned = name
+    .toWellFormed()
+    .replace(/["\\\u0000-\u001f\u007f]/g, '')
+    .trim()
   return cleaned || FALLBACK_DOWNLOAD_NAME
 }
 
 export async function getSignedFileUrl(key: string, downloadName: string) {
   const safeName = sanitizeDownloadName(downloadName)
+  // O `filename` entre aspas só carrega ASCII; o nome real vai em `filename*`.
+  const asciiName = safeName.replace(/[^\x20-\x7e]/g, '_')
   // `filename*` (RFC 5987) leva o nome em UTF-8 para os acentos sobreviverem;
   // `filename` fica como alternativa para clientes que não o entendem.
   const encodedName = encodeURIComponent(safeName).replace(
@@ -74,9 +79,18 @@ export async function getSignedFileUrl(key: string, downloadName: string) {
       Key: key,
       // Forçar o tipo na resposta impede que o arquivo volte como outra coisa.
       ResponseContentType: 'application/pdf',
-      ResponseContentDisposition: `attachment; filename="${safeName}"; filename*=UTF-8''${encodedName}`,
+      ResponseContentDisposition: `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`,
     }),
     { expiresIn: READ_EXPIRES_SECONDS },
+  )
+}
+
+function defaultDeleteErrorLog(key: string, error: unknown) {
+  // Só a chave e a mensagem: nunca o objeto de erro inteiro, que pode carregar
+  // configuração do cliente.
+  console.error(
+    `Falha ao apagar ${key} do bucket:`,
+    error instanceof Error ? error.message : String(error),
   )
 }
 
@@ -87,13 +101,13 @@ export async function getSignedFileUrl(key: string, downloadName: string) {
  */
 export async function deleteFile(
   key: string,
-  onError?: (key: string, error: unknown) => void,
+  onError: (key: string, error: unknown) => void = defaultDeleteErrorLog,
 ) {
   try {
     await client.send(
       new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: key }),
     )
   } catch (error) {
-    onError?.(key, error)
+    onError(key, error)
   }
 }

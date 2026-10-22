@@ -84,6 +84,19 @@ describe('storage', () => {
       )
     })
 
+    it('keeps the quoted filename ASCII-only', async () => {
+      await getSignedFileUrl('k', 'Holerite março.pdf')
+
+      expect(signedInput().ResponseContentDisposition).toContain(
+        'filename="Holerite mar_o.pdf"',
+      )
+    })
+
+    it('does not throw on lone surrogates', async () => {
+      await expect(getSignedFileUrl('k', 'a\ud800b.pdf')).resolves.toBeTruthy()
+      expect(signedInput().ResponseContentDisposition).toContain('%EF%BF%BD')
+    })
+
     it('sends an RFC 5987 name so accents survive', async () => {
       await getSignedFileUrl('k', 'Holerite março.pdf')
 
@@ -113,9 +126,13 @@ describe('storage', () => {
       expect(onError).toHaveBeenCalledWith('k', failure)
     })
 
-    it('does not throw without a callback either', async () => {
+    it('logs the key and message by default, and does not throw', async () => {
       send.mockRejectedValue(new Error('boom'))
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
       await expect(deleteFile('k')).resolves.toBeUndefined()
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('k'), 'boom')
+      spy.mockRestore()
     })
   })
 })
