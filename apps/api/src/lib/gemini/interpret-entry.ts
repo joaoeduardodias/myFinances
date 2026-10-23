@@ -1,6 +1,7 @@
 import { env } from '@myfinances/env'
 import { z } from 'zod'
 
+import { isCalendarDate } from '../../http/routes/transactions/transaction-schema'
 import { addDays } from '../finance/business-days'
 import { CATEGORIES, type Category } from '../finance/categories'
 import type { IsoDate } from '../today'
@@ -9,6 +10,9 @@ import type { IsoDate } from '../today'
 export const GEMINI_MODEL = 'gemini-2.5-flash'
 
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
+
+/** Sem isso um Gemini travado seguraria o webhook do WhatsApp. */
+const GEMINI_TIMEOUT_MS = 15_000
 
 /** Até quantos dias atrás um lançamento manual pode ser datado. */
 const MAX_DAYS_BACK = 60
@@ -58,14 +62,14 @@ const RESPONSE_SCHEMA = {
   type: 'object',
   properties: {
     understood: { type: 'boolean' },
-    missing: { type: 'string', nullable: true },
-    description: { type: 'string', nullable: true },
-    amount: { type: 'number', nullable: true },
+    missing: { type: ['string', 'null'] },
+    description: { type: ['string', 'null'] },
+    amount: { type: ['number', 'null'] },
     direction: { type: 'string', enum: ['debit', 'credit'] },
-    accountId: { type: 'string', nullable: true },
+    accountId: { type: ['string', 'null'] },
     candidateAccountIds: { type: 'array', items: { type: 'string' } },
-    date: { type: 'string', nullable: true },
-    category: { type: 'string', enum: [...CATEGORIES], nullable: true },
+    date: { type: ['string', 'null'] },
+    category: { anyOf: [{ type: 'string', enum: [...CATEGORIES] }, { type: 'null' }] },
   },
   required: ['understood', 'direction'],
 } as const
@@ -124,6 +128,7 @@ async function callGemini(input: Input, deps: Deps): Promise<string> {
   try {
     response = await (deps.fetch ?? fetch)(ENDPOINT, {
       method: 'POST',
+      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
       headers: {
         'content-type': 'application/json',
         'x-goog-api-key': apiKey,
@@ -188,7 +193,7 @@ export async function interpretEntry(
   if (cents <= 0) return { kind: 'not_understood', reply: NOT_FOUND_AMOUNT }
 
   const date = raw.date ?? input.today
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !isCalendarDate(date)) {
     return {
       kind: 'not_understood',
       reply: 'Não entendi a data. Tenta assim: almoço 45 pix nubank ontem',

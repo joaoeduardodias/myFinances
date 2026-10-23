@@ -29,7 +29,7 @@ export const transactionSchema = z.object({
 })
 
 /** Volta de `Date.UTC` igual ao texto: 2026-02-31 viraria 03/03 e é recusado. */
-function isCalendarDate(value: string): boolean {
+export function isCalendarDate(value: string): boolean {
   const date = new Date(`${value}T00:00:00Z`)
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
 }

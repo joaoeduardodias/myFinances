@@ -197,4 +197,37 @@ describe('interpretEntry', () => {
       ),
     ).rejects.toBeInstanceOf(GeminiUnavailableError)
   })
+
+  it('o schema enviado é JSON Schema padrão, sem nullable', async () => {
+    const { fetchMock, result } = run(base)
+    await result
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    const sent = JSON.parse(String(init.body))
+    const schema = sent.generationConfig.responseJsonSchema
+    expect(JSON.stringify(schema)).not.toContain('nullable')
+    expect(schema.properties.amount.type).toContain('null')
+    expect(schema.properties.accountId.type).toContain('null')
+    expect(schema.properties.category.anyOf).toContainEqual({ type: 'null' })
+  })
+
+  it('manda um signal de timeout e aborto vira GeminiUnavailableError', async () => {
+    const { fetchMock, result } = run(base)
+    await result
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(init.signal).toBeInstanceOf(AbortSignal)
+    const aborted = vi.fn(async () => {
+      throw new DOMException('timeout', 'AbortError')
+    })
+    await expect(
+      interpretEntry(
+        { text: 'x', accounts: ACCOUNTS, today: TODAY },
+        { fetch: aborted as unknown as typeof fetch, apiKey: 'k' },
+      ),
+    ).rejects.toBeInstanceOf(GeminiUnavailableError)
+  })
+
+  it('data inexistente no calendário vira not_understood', async () => {
+    const { result } = run({ ...base, date: '2026-09-31' })
+    expect((await result).kind).toBe('not_understood')
+  })
 })
