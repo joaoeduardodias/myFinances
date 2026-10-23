@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { type OverviewAccount, accountsOverview } from './accounts-overview'
+import { accountsOverview, type OverviewAccount } from './accounts-overview'
 
 function account(extra: Partial<OverviewAccount>): OverviewAccount {
   return {
