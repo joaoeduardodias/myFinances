@@ -174,11 +174,13 @@ export function Transactions() {
             onChange={(e) => setFilter('accountId', e.target.value)}
           >
             <option value="">Todas</option>
-            {accounts.data?.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
+            {accounts.data
+              ?.filter((a) => a.type !== 'CREDIT')
+              .map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
           </NativeSelect>
         </div>
         <div className="flex flex-col gap-1.5">

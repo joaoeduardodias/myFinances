@@ -25,7 +25,7 @@ export async function getTransactions(app: FastifyInstance) {
       {
         schema: {
           tags: ['Transactions'],
-          summary: 'List the transactions of the authenticated user (50 per page).',
+          summary: 'List the non-card transactions of the authenticated user (50 per page).',
           operationId: 'getTransactions',
           security: [{ bearerAuth: [] }],
           querystring: z.object({
@@ -49,7 +49,8 @@ export async function getTransactions(app: FastifyInstance) {
         const userId = await request.getCurrentUserId()
         const { from, to, accountId, category, kind, page } = request.query
 
-        const where: Prisma.TransactionWhereInput = { userId }
+        // Lançamentos de cartão ficam na tela de cartões.
+        const where: Prisma.TransactionWhereInput = { userId, account: { type: { not: 'CREDIT' } } }
         if (from || to) {
           where.date = { ...(from ? { gte: toDbDate(from) } : {}), ...(to ? { lte: toDbDate(to) } : {}) }
         }

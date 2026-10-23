@@ -77,6 +77,7 @@ describe('GET /transactions', () => {
     const args = prismaMock.transaction.findMany.mock.calls[0][0]
     expect(args.where).toMatchObject({
       userId: userA,
+      account: { type: { not: 'CREDIT' } },
       amountCents: { lt: 0 },
       isTransfer: false,
     })
