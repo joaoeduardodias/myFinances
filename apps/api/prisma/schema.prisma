@@ -13,6 +13,8 @@ model User {
   name          String
   email         String         @unique
   passwordHash  String         @map("password_hash")
+  // Só dígitos, como a Meta manda em `from` (ex.: 5511999999999).
+  whatsappPhone String?        @unique @map("whatsapp_phone")
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
   sessions      UserSession[]
@@ -159,6 +161,12 @@ model Transaction {
   pluggyCategory      String?           @map("pluggy_category")
   category            String?
   categoryLocked      Boolean           @default(false) @map("category_locked")
+  // O sync não sobrescreve description/descriptionKey.
+  descriptionLocked   Boolean           @default(false) @map("description_locked")
+  // wamid que criou ou renomeou a transação; em MANUAL marca "lançamento do WhatsApp esperando a Pluggy".
+  whatsappMessageId   String?           @unique @map("whatsapp_message_id")
+  // Descrição da Pluggy antes de um renomear feito na hora da mensagem (para o "desfazer").
+  originalDescription String?           @map("original_description")
   isTransfer          Boolean           @default(false) @map("is_transfer")
   transferLocked      Boolean           @default(false) @map("transfer_locked")
   transferPairId      String?           @unique @map("transfer_pair_id")

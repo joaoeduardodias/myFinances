@@ -361,7 +361,12 @@ describe('DELETE /transactions/:id', () => {
   })
 
   it('apaga MANUAL e recalcula o saldo', async () => {
-    prismaMock.transaction.findFirst.mockResolvedValue({ id: txId, source: 'MANUAL', accountId: walletId })
+    prismaMock.transaction.findFirst.mockResolvedValue({
+      id: txId,
+      source: 'MANUAL',
+      accountId: walletId,
+      account: { type: 'WALLET' },
+    })
     prismaMock.transaction.aggregate.mockResolvedValue({ _sum: { amountCents: null } })
     const res = await call(deleteManualTransaction, { method: 'DELETE', url: `/transactions/${txId}` })
     expect(res.statusCode).toBe(204)
@@ -370,6 +375,19 @@ describe('DELETE /transactions/:id', () => {
       where: { id: walletId },
       data: { balanceCents: 0 },
     })
+  })
+
+  it('apagar manual em conta de banco não recalcula saldo', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue({
+      id: txId,
+      source: 'MANUAL',
+      accountId: uuid('bank'),
+      account: { type: 'BANK' },
+    })
+    const res = await call(deleteManualTransaction, { method: 'DELETE', url: `/transactions/${txId}` })
+    expect(res.statusCode).toBe(204)
+    expect(prismaMock.transaction.delete).toHaveBeenCalledWith({ where: { id: txId } })
+    expect(prismaMock.transaction.aggregate).not.toHaveBeenCalled()
   })
 
   it('transação de outro usuário dá 404', async () => {

@@ -30,7 +30,7 @@ export async function deleteManualTransaction(app: FastifyInstance) {
         const { id } = request.params
 
         const tx = await prisma.transaction.findFirst({
-          select: { id: true, source: true, accountId: true },
+          select: { id: true, source: true, accountId: true, account: { select: { type: true } } },
           where: { id, userId },
         })
         if (!tx) throw new NotFoundError('Transação não encontrada.')
@@ -39,7 +39,7 @@ export async function deleteManualTransaction(app: FastifyInstance) {
         }
 
         await prisma.transaction.delete({ where: { id } })
-        await recomputeWalletBalance(tx.accountId)
+        if (tx.account.type === 'WALLET') await recomputeWalletBalance(tx.accountId)
 
         return reply.status(204).send(null)
       },

@@ -21,6 +21,7 @@ import { type IsoDate, todayIso } from '@/lib/today'
 
 import { detectAndStoreRecurrences } from './detect-and-store-recurrences'
 import { removeTransactions } from './remove-transactions'
+import { runExclusive } from './user-queue'
 import { ensureWalletAccount, recomputeWalletBalance } from './wallet'
 
 const FIRST_SYNC_DAYS = 365
@@ -48,22 +49,6 @@ function pluggyDate(value: string): IsoDate {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
-}
-
-// Webhook e o botão Sincronizar podem disparar ao mesmo tempo para o mesmo
-// usuário; em paralelo, os upserts colidem (P2002). A API roda numa instância
-// só, então uma fila em memória por usuário basta.
-const userQueues = new Map<string, Promise<void>>()
-
-function runExclusive(userId: string, task: () => Promise<void>): Promise<void> {
-  const previous = userQueues.get(userId) ?? Promise.resolve()
-  const run = previous.then(task)
-  const tail = run.catch(() => {})
-  userQueues.set(userId, tail)
-  tail.then(() => {
-    if (userQueues.get(userId) === tail) userQueues.delete(userId)
-  })
-  return run
 }
 
 export async function syncConnection(
