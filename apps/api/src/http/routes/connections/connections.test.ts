@@ -24,6 +24,10 @@ vi.mock('@/services/sync-connection', () => ({
 vi.mock('@/services/wallet', () => ({
   ensureWalletAccount: ensureWalletAccountMock,
 }))
+const removeTransactionsMock = vi.fn()
+vi.mock('@/services/remove-transactions', () => ({
+  removeTransactions: removeTransactionsMock,
+}))
 
 const { PluggyError, PluggyNotFoundError } = await import('@/lib/pluggy/client')
 const { createConnection } = await import('./create-connection')
@@ -222,6 +226,18 @@ describe('DELETE /connections/:id', () => {
       userId: userA,
     })
     expect(prismaMock.connection.delete).toHaveBeenCalledWith({ where: { id: connId } })
+  })
+
+  it('apaga as transações antes, para o crédito do saque na Carteira não ficar órfão', async () => {
+    prismaMock.connection.findFirst.mockResolvedValue({ id: connId })
+    await call(deleteConnection, { method: 'DELETE', url: `/connections/${connId}` })
+    expect(removeTransactionsMock).toHaveBeenCalledWith({
+      userId: userA,
+      account: { connectionId: connId },
+    })
+    expect(removeTransactionsMock.mock.invocationCallOrder[0]).toBeLessThan(
+      prismaMock.connection.delete.mock.invocationCallOrder[0],
+    )
   })
 
   it('responde 404 para conexão de outro usuário', async () => {
