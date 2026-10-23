@@ -16,7 +16,22 @@ const partnerSelect = {
 export async function removeTransactions(where: Prisma.TransactionWhereInput): Promise<number> {
   const removed = await prisma.transaction.findMany({
     where,
-    select: { id: true, transferPair: partnerSelect, transferPairOf: partnerSelect },
+    select: {
+      id: true,
+      userId: true,
+      accountId: true,
+      date: true,
+      description: true,
+      descriptionKey: true,
+      amountCents: true,
+      category: true,
+      categoryLocked: true,
+      source: true,
+      descriptionLocked: true,
+      whatsappMessageId: true,
+      transferPair: partnerSelect,
+      transferPairOf: partnerSelect,
+    },
   })
   if (removed.length === 0) return 0
 
@@ -47,6 +62,27 @@ export async function removeTransactions(where: Prisma.TransactionWhereInput): P
     await db.transaction.deleteMany({
       where: { id: { in: [...removedIds, ...walletCreditIds] } },
     })
+    // Pendente que o WhatsApp renomeou e sumiu: o lançamento do usuário não
+    // se perde. Volta como manual (sem o texto do banco) e a lançada que a
+    // substituir casa com ele no mesmo sync. Depois do delete por causa do @unique.
+    for (const tx of removed) {
+      if (tx.source !== 'PLUGGY' || !tx.descriptionLocked || !tx.whatsappMessageId) continue
+      await db.transaction.create({
+        data: {
+          userId: tx.userId,
+          accountId: tx.accountId,
+          date: tx.date,
+          description: tx.description,
+          descriptionKey: tx.descriptionKey,
+          amountCents: tx.amountCents,
+          category: tx.category,
+          categoryLocked: tx.categoryLocked,
+          whatsappMessageId: tx.whatsappMessageId,
+          source: 'MANUAL',
+          status: 'POSTED',
+        },
+      })
+    }
   })
   for (const walletId of walletIds) await recomputeWalletBalance(walletId)
   return removed.length
