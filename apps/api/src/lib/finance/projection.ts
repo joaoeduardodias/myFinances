@@ -161,8 +161,9 @@ export function computeProjection(input: {
       })),
     )
 
+  // Fatura tem o pago registrado; vencida e não paga continua devida, por mais antiga que seja.
   const billPayables: Payable[] = cardBills
-    .filter((b) => b.remainingCents > 0 && b.dueDate >= from && b.dueDate <= windowEnd)
+    .filter((b) => b.remainingCents > 0 && b.dueDate <= windowEnd)
     .map((b) => ({
       kind: 'BILL' as const,
       // O cartão tem uma fatura por vencimento; só o `accountId` repetiria a chave.

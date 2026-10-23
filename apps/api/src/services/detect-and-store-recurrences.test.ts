@@ -28,7 +28,7 @@ beforeEach(() => {
 })
 
 describe('detectAndStoreRecurrences', () => {
-  it('grava os candidatos como SUGGESTED e devolve quantos criou', async () => {
+  it('grava os candidatos com o status da detecção e devolve quantos criou', async () => {
     const created = await detectAndStoreRecurrences(USER, TODAY)
 
     expect(created).toBe(1)
@@ -58,7 +58,13 @@ describe('detectAndStoreRecurrences', () => {
 
   it('depois de descartada, rodar de novo não recria a sugestão', async () => {
     prismaMock.recurrence.findMany.mockResolvedValue([
-      { accountId: 'acc-1', descriptionKey: 'netflix com', direction: 'OUT', status: 'DISMISSED' },
+      {
+        accountId: 'acc-1',
+        descriptionKey: 'netflix com',
+        direction: 'OUT',
+        dayRule: 'DAY_OF_MONTH',
+        dayValue: 10,
+      },
     ])
 
     const created = await detectAndStoreRecurrences(USER, TODAY)

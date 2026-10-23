@@ -4,6 +4,7 @@ import { fromDbDate, toDbDate } from '@/lib/db-date'
 import { addDays } from '@/lib/finance/business-days'
 import { mapPluggyCategory } from '@/lib/finance/categories'
 import { descriptionKey } from '@/lib/finance/description-key'
+import { isSameRecurrenceDay } from '@/lib/finance/detect-recurrences'
 import {
   detectTransferPairs,
   isBillPaymentDescription,
@@ -100,7 +101,7 @@ async function runSync(
       ? addDays(todayIso(env.TIMEZONE, connection.lastSyncedAt), -RESYNC_OVERLAP_DAYS)
       : addDays(today, -FIRST_SYNC_DAYS)
     const renewed = await syncTransactions(client, accounts, userId, dateFrom)
-    await mergeRenewedAccounts(renewed, userId, connectionId)
+    await mergeRenewedAccounts(renewed, userId, connectionId, today)
     await syncBills(client, accounts, userId)
     // Na primeira sincronização o ano inteiro é novo e precisa ser pareado.
     const transferWindowDays = connection.lastSyncedAt ? TRANSFER_WINDOW_DAYS : FIRST_SYNC_DAYS
@@ -282,9 +283,10 @@ async function mergeRenewedAccounts(
   renewed: Map<string, string>,
   userId: string,
   connectionId: string,
+  today: IsoDate,
 ) {
   const recurrenceSelect = {
-    select: { id: true, descriptionKey: true, direction: true, status: true },
+    select: { id: true, descriptionKey: true, direction: true, dayRule: true, dayValue: true, status: true },
   } as const
   for (const [oldId, newId] of renewed) {
     const old = await prisma.account.findFirst({
@@ -300,11 +302,14 @@ async function mergeRenewedAccounts(
     await prisma.$transaction(async (db) => {
       await db.transaction.updateMany({ where: { accountId: oldId }, data: { accountId: newId } })
 
-      // Uma recorrente por (conta, chave, direção): na colisão fica a decisão
+      // Uma recorrente por (conta, chave, direção, dia próximo): na colisão fica a decisão
       // mais forte do usuário — confirmada, depois descartada, depois sugerida.
       for (const recurrence of old.recurrences) {
         const clash = target.recurrences.find(
-          (r) => r.descriptionKey === recurrence.descriptionKey && r.direction === recurrence.direction,
+          (r) =>
+            r.descriptionKey === recurrence.descriptionKey &&
+            r.direction === recurrence.direction &&
+            isSameRecurrenceDay(r, recurrence, today),
         )
         if (clash) {
           if (RECURRENCE_STATUS_RANK[recurrence.status] <= RECURRENCE_STATUS_RANK[clash.status]) {

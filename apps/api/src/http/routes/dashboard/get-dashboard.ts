@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 import { auth } from '@/http/middlewares/auth'
 import { accountsOverview } from '@/lib/finance/accounts-overview'
+import { monthlyFlow } from '@/lib/finance/monthly-flow'
 import { computeProjection } from '@/lib/finance/projection'
 import { todayIso } from '@/lib/today'
 import { loadFinanceSnapshot } from '@/services/load-finance-snapshot'
@@ -63,6 +64,14 @@ const dashboardSchema = z.object({
     limitUsedCents: z.number().int(),
     items: z.array(accountLineSchema.extend({ creditLimitCents: z.number().int().nullable() })),
   }),
+  flow: z.array(
+    z.object({
+      month: z.string(),
+      creditCents: z.number().int(),
+      debitCents: z.number().int(),
+      cardCents: z.number().int(),
+    }),
+  ),
 })
 
 export async function getDashboard(app: FastifyInstance) {
@@ -74,7 +83,7 @@ export async function getDashboard(app: FastifyInstance) {
       {
         schema: {
           tags: ['Dashboard'],
-          summary: 'How much can be spent until the next income, and the accounts and cards.',
+          summary: 'How much can be spent until the next income, the accounts and cards, and the monthly flow.',
           operationId: 'getDashboard',
           security: [{ bearerAuth: [] }],
           response: { 200: dashboardSchema },
@@ -97,7 +106,12 @@ export async function getDashboard(app: FastifyInstance) {
           cardBills,
           cardNames,
         })
-        return reply.send({ ...projection, cardsMissingCycle, ...accountsOverview(accounts) })
+        return reply.send({
+          ...projection,
+          cardsMissingCycle,
+          ...accountsOverview(accounts),
+          flow: monthlyFlow({ today, accounts, transactions }),
+        })
       },
     )
 }

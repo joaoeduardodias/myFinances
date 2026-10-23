@@ -224,19 +224,30 @@ describe('computeProjection', () => {
     expect(projection.balanceCents).toBe(305000)
   })
 
-  it('usa o restante da fatura e ignora a quitada ou fora da janela', () => {
+  it('usa o restante da fatura e ignora a quitada ou depois da janela', () => {
     const projection = computeProjection({
       ...baseInput,
       cardBills: [
         { ...bill, paidCents: 30000, remainingCents: 50000 },
         { ...bill, dueDate: '2026-10-03', status: 'CLOSED', remainingCents: 0 },
-        { ...bill, dueDate: '2026-10-19', status: 'CLOSED' },
         { ...bill, dueDate: '2026-12-03', status: 'FUTURE' },
       ],
     })
 
     expect(projection.payables.filter((p) => p.kind === 'BILL')).toEqual([
       { kind: 'BILL', refId: 'card:2026-11-03', description: 'Fatura Nubank', dueDate: '2026-11-03', amountCents: 50000 },
+    ])
+  })
+
+  it('mantém a fatura vencida e não paga, por mais antiga que seja', () => {
+    const projection = computeProjection({
+      ...baseInput,
+      cardBills: [bill, { ...bill, dueDate: '2026-09-03', status: 'CLOSED', remainingCents: 2409 }],
+    })
+
+    expect(projection.payables.filter((p) => p.kind === 'BILL')).toEqual([
+      { kind: 'BILL', refId: 'card:2026-09-03', description: 'Fatura Nubank', dueDate: '2026-09-03', amountCents: 2409 },
+      { kind: 'BILL', refId: 'card:2026-11-03', description: 'Fatura Nubank', dueDate: '2026-11-03', amountCents: 80000 },
     ])
   })
 

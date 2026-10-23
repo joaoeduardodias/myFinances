@@ -4,7 +4,7 @@ import { detectRecurrenceCandidates, WINDOW_DAYS } from '@/lib/finance/detect-re
 import { prisma } from '@/lib/prisma'
 import { type IsoDate, todayIso } from '@/lib/today'
 
-/** Grava como `SUGGESTED` as recorrências novas do histórico e devolve quantas criou. */
+/** Grava as recorrências novas do histórico (sugeridas; salário já confirmado) e devolve quantas criou. */
 export async function detectAndStoreRecurrences(
   userId: string,
   today: IsoDate = todayIso(),
@@ -27,7 +27,7 @@ export async function detectAndStoreRecurrences(
   // Todos os status: o que o usuário descartou ou já confirmou não volta como sugestão.
   const known = await prisma.recurrence.findMany({
     where: { userId },
-    select: { accountId: true, descriptionKey: true, direction: true },
+    select: { accountId: true, descriptionKey: true, direction: true, dayRule: true, dayValue: true },
   })
 
   const txs = rows.map((r) => ({ ...r, date: fromDbDate(r.date) }))
@@ -36,7 +36,7 @@ export async function detectAndStoreRecurrences(
 
   // `skipDuplicates` cobre a corrida com outro detector; o índice único é a garantia final.
   const { count } = await prisma.recurrence.createMany({
-    data: candidates.map((c) => ({ ...c, userId, status: 'SUGGESTED' as const })),
+    data: candidates.map((c) => ({ ...c, userId })),
     skipDuplicates: true,
   })
   return count

@@ -5,6 +5,8 @@ import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { BanksOverview, CardsOverview } from '@/components/accounts-overview'
+import { FlowChart, FlowSummary } from '@/components/monthly-flow'
+import { PayablesOverview } from '@/components/payables-overview'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -16,6 +18,11 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { type Dashboard, getDashboard, syncAll } from '@/http/dashboard'
 import { formatBRL, formatDate } from '@/lib/format'
+
+const monthLabel = new Intl.DateTimeFormat('pt-BR', {
+  month: 'long',
+  year: 'numeric',
+})
 
 const linkClass = 'font-medium underline underline-offset-4'
 
@@ -33,10 +40,24 @@ function Notice({ children }: { children: React.ReactNode }) {
 
 function DashboardSkeleton() {
   return (
-    <div className="grid gap-4 md:grid-cols-2" aria-busy="true">
-      <Skeleton className="h-64" />
-      <Skeleton className="h-64" />
-      <Skeleton className="h-40 md:col-span-2" />
+    <div
+      className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-6"
+      aria-busy="true"
+    >
+      <div className="flex flex-col gap-4 xl:order-2">
+        <Skeleton className="h-64" />
+        <Skeleton className="h-64" />
+        <Skeleton className="h-48" />
+        <Skeleton className="h-40" />
+      </div>
+      <div className="flex flex-col gap-4 xl:order-1 xl:gap-6">
+        <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+        <Skeleton className="h-[30rem]" />
+      </div>
     </div>
   )
 }
@@ -47,28 +68,42 @@ function DashboardContent({ data }: { data: Dashboard }) {
     ? `${nextIncome.description} (${formatDate(nextIncome.date)})`
     : `o fim do mês (${formatDate(windowEnd)})`
 
+  // No celular, contas e cartões vêm primeiro; na tela larga, ficam na coluna da direita.
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <BanksOverview banks={data.banks} />
-      <CardsOverview cards={data.cards} />
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-6">
+      <aside className="flex flex-col gap-4 xl:order-2">
+        <BanksOverview banks={data.banks} />
+        <CardsOverview cards={data.cards} />
+        <PayablesOverview
+          payables={data.payables}
+          totalCents={data.payableTotalCents}
+          today={data.today}
+          windowEnd={windowEnd}
+        />
 
-      <Card className="md:col-span-2">
-        <CardHeader>
-          <CardDescription>Quanto posso gastar</CardDescription>
-          <CardTitle
-            className={`text-4xl font-semibold tabular-nums sm:text-5xl ${
-              data.availableCents < 0 ? 'text-destructive' : ''
-            }`}
-          >
-            {formatBRL(data.availableCents)}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground tabular-nums">
-            {`${formatBRL(data.perDayCents)}/dia até ${perDayTarget}`}
-          </p>
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardDescription>Quanto posso gastar</CardDescription>
+            <CardTitle
+              className={`text-4xl font-semibold tabular-nums ${
+                data.availableCents < 0 ? 'text-destructive' : ''
+              }`}
+            >
+              {formatBRL(data.availableCents)}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground tabular-nums">
+              {`${formatBRL(data.perDayCents)}/dia até ${perDayTarget}`}
+            </p>
+          </CardContent>
+        </Card>
+      </aside>
+
+      <div className="flex min-w-0 flex-col gap-4 xl:order-1 xl:gap-6">
+        <FlowSummary flow={data.flow} />
+        <FlowChart flow={data.flow} />
+      </div>
     </div>
   )
 }
@@ -97,9 +132,16 @@ export function Home() {
   }, [])
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4 sm:p-6">
+    <div className="flex w-full flex-col gap-4 p-4 sm:p-6 lg:p-8">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold">Início</h1>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Início</h1>
+          {data && (
+            <p className="text-muted-foreground text-sm">
+              {`Visão geral · ${monthLabel.format(new Date(`${data.today}T12:00:00`))}`}
+            </p>
+          )}
+        </div>
         <Button
           variant="outline"
           size="sm"

@@ -91,6 +91,26 @@ const base: Dashboard = {
       },
     ],
   },
+  flow: [
+    ...Array.from({ length: 10 }, (_, i) => ({
+      month: `2025-${String(i + 11).padStart(2, '0')}`,
+      creditCents: 0,
+      debitCents: 0,
+      cardCents: 0,
+    })),
+    {
+      month: '2026-09',
+      creditCents: 400000,
+      debitCents: 90000,
+      cardCents: 30000,
+    },
+    {
+      month: '2026-10',
+      creditCents: 500000,
+      debitCents: 120000,
+      cardCents: 45000,
+    },
+  ],
 }
 
 function renderHome(data: Partial<Dashboard> = {}) {
@@ -138,6 +158,9 @@ describe('Home', () => {
     expect(within(banks).getByText('Banco Bradesco')).not.toBeVisible()
     await userEvent.setup().click(within(banks).getByText('Bradesco'))
     expect(within(banks).getByText('Banco Bradesco')).toBeVisible()
+    expect(
+      within(banks).getByRole('link', { name: /Banco Bradesco/ }),
+    ).toHaveAttribute('href', '/transacoes?accountId=a1')
   })
 
   it('shows credit cards with the used share of the limit', async () => {
@@ -156,6 +179,10 @@ describe('Home', () => {
     )
     expect(within(cards).getByText('xxxx 0187')).toBeInTheDocument()
     expect(within(cards).getByText('R$ 0,00')).toHaveClass('text-destructive')
+    expect(within(cards).getByRole('link', { name: /gold/ })).toHaveAttribute(
+      'href',
+      '/cartoes/k2',
+    )
   })
 
   it('hides the limit bar when no card has a limit', async () => {
@@ -166,6 +193,74 @@ describe('Home', () => {
       name: 'Cartões de crédito',
     })
     expect(within(cards).queryByRole('progressbar')).not.toBeInTheDocument()
+  })
+
+  it('shows the month credits, debits and card purchases against the previous month', async () => {
+    renderHome()
+    const month = await screen.findByRole('region', {
+      name: 'Movimento do mês',
+    })
+    expect(within(month).getByText('R$ 5.000,00')).toHaveClass('text-income')
+    expect(within(month).getByText('R$ 1.200,00')).toHaveClass(
+      'text-destructive',
+    )
+    expect(within(month).getByText('R$ 450,00')).toBeInTheDocument()
+    // Crédito subindo é bom; débito subindo é ruim.
+    expect(within(month).getByText('+25%')).toHaveClass('text-income')
+    expect(within(month).getByText('+33%')).toHaveClass('text-destructive')
+    expect(
+      within(month).getByText('vs mês anterior (R$ 4.000,00)'),
+    ).toBeInTheDocument()
+    expect(within(month).getByText('R$ 3.350,00')).toHaveClass('text-income')
+    expect(
+      screen.getByRole('img', { name: /10\/2026 créditos R\$ 5\.000,00/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('lists overdue and upcoming payables with links', async () => {
+    renderHome({
+      payables: [
+        {
+          kind: 'BILL',
+          refId: 'k1:2026-10-10',
+          description: 'Fatura Caixa',
+          dueDate: '2026-10-10',
+          amountCents: 31833,
+        },
+        {
+          kind: 'RECURRENCE',
+          refId: 'r9',
+          description: 'Aluguel',
+          dueDate: '2026-10-22',
+          amountCents: 150000,
+        },
+      ],
+      payableTotalCents: 181833,
+    })
+    const payables = await screen.findByRole('region', { name: 'A pagar' })
+    expect(within(payables).getByText('R$ 1.818,33')).toHaveClass(
+      'text-destructive',
+    )
+    const overdue = within(payables).getByRole('region', { name: 'Vencidas' })
+    expect(within(overdue).getByText('Venceu há 12 dias')).toHaveClass(
+      'text-destructive',
+    )
+    expect(
+      within(overdue).getByRole('link', { name: /Fatura Caixa/ }),
+    ).toHaveAttribute('href', '/cartoes/k1')
+    const upcoming = within(payables).getByRole('region', { name: 'A vencer' })
+    expect(within(upcoming).getByText('Vence hoje')).toBeInTheDocument()
+    expect(
+      within(upcoming).getByRole('link', { name: /Aluguel/ }),
+    ).toHaveAttribute('href', '/recorrentes')
+  })
+
+  it('says there is nothing to pay until the window end', async () => {
+    renderHome({ payables: [], payableTotalCents: 0 })
+    const payables = await screen.findByRole('region', { name: 'A pagar' })
+    expect(
+      within(payables).getByText('Nada a pagar até 05/11/2026.'),
+    ).toBeInTheDocument()
   })
 
   it('paints a negative amount as destructive', async () => {

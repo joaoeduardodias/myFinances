@@ -214,7 +214,8 @@ model Recurrence {
   status               RecurrenceStatus
   createdAt            DateTime             @default(now()) @map("created_at")
 
-  @@unique([userId, accountId, descriptionKey, direction])
+  /// O dia entra na identidade: salário e vale chegam com a mesma descrição.
+  @@unique([userId, accountId, descriptionKey, direction, dayRule, dayValue])
   @@map("recurrences")
 }
 

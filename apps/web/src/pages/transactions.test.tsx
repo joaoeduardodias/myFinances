@@ -113,7 +113,9 @@ describe('Transactions', () => {
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByLabelText('Descrição'), 'Café')
     await user.type(within(dialog).getByLabelText('Valor (R$)'), '20,00')
-    await user.click(within(dialog).getByRole('button', { name: 'Lançar' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Lançar saída' }),
+    )
     await waitFor(() =>
       expect(createManualTransaction).toHaveBeenCalledWith(
         expect.objectContaining({ description: 'Café', amountCents: -2000 }),
@@ -121,7 +123,7 @@ describe('Transactions', () => {
     )
   })
 
-  it('sends a positive amount when the switch is set to income', async () => {
+  it('sends a positive amount when income is chosen', async () => {
     const user = userEvent.setup()
     renderPage()
     await screen.findByText('Mercado')
@@ -129,11 +131,35 @@ describe('Transactions', () => {
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByLabelText('Descrição'), 'Venda')
     await user.type(within(dialog).getByLabelText('Valor (R$)'), '1.234,56')
-    await user.click(within(dialog).getByRole('switch', { name: 'Entrada' }))
-    await user.click(within(dialog).getByRole('button', { name: 'Lançar' }))
+    await user.click(within(dialog).getByRole('radio', { name: 'Entrada' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Lançar entrada' }),
+    )
     await waitFor(() =>
       expect(createManualTransaction).toHaveBeenCalledWith(
         expect.objectContaining({ amountCents: 123456 }),
+      ),
+    )
+  })
+
+  it('sends the chosen category with a manual entry', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Mercado')
+    await user.click(screen.getByRole('button', { name: 'Lançar manualmente' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText('Descrição'), 'Feira')
+    await user.type(within(dialog).getByLabelText('Valor (R$)'), '50,00')
+    await user.selectOptions(
+      within(dialog).getByLabelText('Categoria'),
+      'Alimentação',
+    )
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Lançar saída' }),
+    )
+    await waitFor(() =>
+      expect(createManualTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({ category: 'Alimentação' }),
       ),
     )
   })
@@ -145,7 +171,9 @@ describe('Transactions', () => {
     await user.click(screen.getByRole('button', { name: 'Lançar manualmente' }))
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByLabelText('Descrição'), 'X')
-    await user.click(within(dialog).getByRole('button', { name: 'Lançar' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Lançar saída' }),
+    )
     expect(
       await within(dialog).findByText('Informe um valor válido'),
     ).toBeInTheDocument()

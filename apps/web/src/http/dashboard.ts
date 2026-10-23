@@ -35,6 +35,15 @@ export interface CardsSummary {
   items: (AccountLine & { creditLimitCents: number | null })[]
 }
 
+/** Um mês do fluxo, sem transferências; os valores são positivos. */
+export interface FlowMonth {
+  /** 'YYYY-MM' */
+  month: string
+  creditCents: number
+  debitCents: number
+  cardCents: number
+}
+
 export interface Dashboard {
   today: IsoDate
   balanceCents: number
@@ -54,6 +63,8 @@ export interface Dashboard {
   cardsMissingCycle: { id: string; name: string }[]
   banks: { totalCents: number; groups: BankGroup[] }
   cards: CardsSummary
+  /** Últimos 12 meses, do mais antigo ao atual. */
+  flow: FlowMonth[]
 }
 
 export function getDashboard() {

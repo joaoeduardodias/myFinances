@@ -1,5 +1,6 @@
 import { ChevronDown, CreditCard, Landmark, Wallet } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { Card } from '@/components/ui/card'
 import type { BankGroup, CardsSummary } from '@/http/dashboard'
@@ -10,7 +11,10 @@ const share = new Intl.NumberFormat('pt-BR', {
   maximumFractionDigits: 1,
 })
 
-const sectionLabel =
+export const rowLink =
+  'hover:bg-muted/50 focus-visible:ring-ring flex gap-3 transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-inset'
+
+export const sectionLabel =
   'text-muted-foreground flex items-center gap-2 text-xs font-semibold tracking-wider uppercase'
 
 function balanceClass(cents: number) {
@@ -76,22 +80,24 @@ function BankRow({
         </summary>
         <ul className="bg-muted/30 pb-1">
           {group.accounts.map((account) => (
-            <li
-              key={account.id}
-              className="flex items-baseline gap-3 py-2 pr-13 pl-18 text-sm"
-            >
-              <span className="min-w-0 flex-1 truncate">
-                {account.name}
-                {account.number && (
-                  <span className="text-muted-foreground">
-                    {' '}
-                    · {account.number}
-                  </span>
-                )}
-              </span>
-              <span className="tabular-nums">
-                {formatBRL(account.balanceCents)}
-              </span>
+            <li key={account.id}>
+              <Link
+                to={`/transacoes?accountId=${account.id}`}
+                className={`${rowLink} items-baseline py-2 pr-13 pl-18 text-sm`}
+              >
+                <span className="min-w-0 flex-1 truncate">
+                  {account.name}
+                  {account.number && (
+                    <span className="text-muted-foreground">
+                      {' '}
+                      · {account.number}
+                    </span>
+                  )}
+                </span>
+                <span className="tabular-nums">
+                  {formatBRL(account.balanceCents)}
+                </span>
+              </Link>
             </li>
           ))}
         </ul>
@@ -182,26 +188,33 @@ export function CardsOverview({ cards }: { cards: CardsSummary }) {
       ) : (
         <ul className="divide-y py-1">
           {cards.items.map((card) => (
-            <li key={card.id} className="flex items-center gap-3 px-6 py-3">
-              <span className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-md">
-                <CreditCard
-                  className="text-muted-foreground size-4"
-                  aria-hidden
-                />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{card.name}</span>
-                {card.number && (
-                  <span className="text-muted-foreground block text-xs">
-                    {`xxxx ${card.number}`}
-                  </span>
-                )}
-              </span>
-              <span
-                className={`font-semibold tabular-nums ${cardBalanceClass(card.balanceCents)}`}
+            <li key={card.id}>
+              <Link
+                to={`/cartoes/${card.id}`}
+                className={`${rowLink} items-center px-6 py-3`}
               >
-                {formatBRL(card.balanceCents)}
-              </span>
+                <span className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-md">
+                  <CreditCard
+                    className="text-muted-foreground size-4"
+                    aria-hidden
+                  />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">
+                    {card.name}
+                  </span>
+                  {card.number && (
+                    <span className="text-muted-foreground block text-xs">
+                      {`xxxx ${card.number}`}
+                    </span>
+                  )}
+                </span>
+                <span
+                  className={`font-semibold tabular-nums ${cardBalanceClass(card.balanceCents)}`}
+                >
+                  {formatBRL(card.balanceCents)}
+                </span>
+              </Link>
             </li>
           ))}
         </ul>

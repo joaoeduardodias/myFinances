@@ -117,6 +117,8 @@ describe('GET /dashboard', () => {
     expect(body.availableCents).toBe(70000)
     expect(body.perDayCents).toBe(4666)
     expect(body.cardsMissingCycle).toEqual([{ id: noCycleId, name: 'Inter' }])
+    expect(body.flow).toHaveLength(12)
+    expect(body.flow.at(-1)).toEqual({ month: '2026-10', creditCents: 0, debitCents: 0, cardCents: 80000 })
     expect(prismaMock.account.findMany.mock.calls[0][0].where).toEqual({ userId: userA })
   })
 

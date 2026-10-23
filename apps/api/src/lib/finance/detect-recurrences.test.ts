@@ -37,6 +37,7 @@ describe('detectRecurrenceCandidates', () => {
         expectedAmountCents: 3990,
         dayRule: 'DAY_OF_MONTH',
         dayValue: 10,
+        status: 'SUGGESTED',
       },
     ])
   })
@@ -72,7 +73,15 @@ describe('detectRecurrenceCandidates', () => {
   })
 
   it('não volta a sugerir um grupo já conhecido, mesmo descartado', () => {
-    const known = [{ accountId: 'acc-1', descriptionKey: 'netflix com', direction: 'OUT' as const }]
+    const known = [
+      {
+        accountId: 'acc-1',
+        descriptionKey: 'netflix com',
+        direction: 'OUT' as const,
+        dayRule: 'DAY_OF_MONTH' as const,
+        dayValue: 25,
+      },
+    ]
     expect(detectRecurrenceCandidates(netflix, known, TODAY)).toEqual([])
   })
 
@@ -103,5 +112,61 @@ describe('detectRecurrenceCandidates', () => {
       'acc-1:OUT',
       'acc-2:OUT',
     ])
+  })
+
+  describe('salário', () => {
+    const ted = { description: 'RECEBIMENTO TED SALARIO', descriptionKey: 'recebimento ted salario' }
+    // Salário no 4º dia útil; no dia 20, o vale e o 13º, que não se repete.
+    const october = [
+      tx('2026-10-06', 297000, ted),
+      tx('2026-10-20', 257700, ted),
+      tx('2026-10-20', 168900, ted),
+    ]
+    const known = (dayRule: 'DAY_OF_MONTH' | 'NTH_BUSINESS_DAY', dayValue: number) => ({
+      accountId: 'acc-1',
+      descriptionKey: 'recebimento ted salario',
+      direction: 'IN' as const,
+      dayRule,
+      dayValue,
+    })
+
+    it('confirma com um mês só, um recorrente por dia, com o menor valor do dia', () => {
+      expect(detectRecurrenceCandidates(october, [], TODAY)).toEqual([
+        {
+          accountId: 'acc-1',
+          descriptionKey: 'recebimento ted salario',
+          description: 'RECEBIMENTO TED SALARIO',
+          direction: 'IN',
+          expectedAmountCents: 297000,
+          dayRule: 'NTH_BUSINESS_DAY',
+          dayValue: 4,
+          status: 'CONFIRMED',
+        },
+        {
+          accountId: 'acc-1',
+          descriptionKey: 'recebimento ted salario',
+          description: 'RECEBIMENTO TED SALARIO',
+          direction: 'IN',
+          expectedAmountCents: 168900,
+          dayRule: 'DAY_OF_MONTH',
+          dayValue: 20,
+          status: 'CONFIRMED',
+        },
+      ])
+    })
+
+    it('não recria o do mesmo dia já conhecido, mesmo descartado, mas cria o do outro dia', () => {
+      expect(
+        detectRecurrenceCandidates(october, [known('NTH_BUSINESS_DAY', 4)], TODAY).map((c) => c.dayValue),
+      ).toEqual([20])
+      expect(
+        detectRecurrenceCandidates(october, [known('DAY_OF_MONTH', 21)], TODAY).map((c) => c.dayValue),
+      ).toEqual([4])
+    })
+
+    it('não trata saída com "salario" como salário', () => {
+      const out = october.map((t) => ({ ...t, amountCents: -t.amountCents }))
+      expect(detectRecurrenceCandidates(out, [], TODAY)).toEqual([])
+    })
   })
 })
