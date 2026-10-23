@@ -1,9 +1,16 @@
+import type { Sort } from '@/lib/sort'
 import type { IsoDate } from '@/lib/types'
 
 import { api } from './api'
 
 export type AccountType = 'BANK' | 'CREDIT' | 'WALLET'
 export type TransactionKind = 'income' | 'expense' | 'transfer'
+export type TransactionSortColumn =
+  | 'date'
+  | 'description'
+  | 'account'
+  | 'category'
+  | 'amount'
 
 export interface Account {
   id: string
@@ -41,6 +48,7 @@ export interface TransactionFilters {
   category?: string
   kind?: TransactionKind
   page: number
+  sort: Sort<TransactionSortColumn>
 }
 
 export interface ManualTransactionInput {
@@ -67,6 +75,8 @@ export function listTransactions(filters: TransactionFilters) {
     from: filters.from,
     to: filters.to,
     page: filters.page,
+    sort: filters.sort.column,
+    order: filters.sort.order,
   }
   if (filters.accountId) searchParams.accountId = filters.accountId
   if (filters.category) searchParams.category = filters.category

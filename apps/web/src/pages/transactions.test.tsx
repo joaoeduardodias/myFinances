@@ -195,4 +195,30 @@ describe('Transactions', () => {
       ),
     )
   })
+
+  it('sorts by the clicked column on the server', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Mercado')
+    expect(listTransactions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: { column: 'date', order: 'desc' } }),
+    )
+    const header = screen.getByRole('columnheader', { name: 'Valor' })
+    await user.click(within(header).getByRole('button'))
+    await waitFor(() =>
+      expect(listTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          sort: { column: 'amount', order: 'asc' },
+          page: 1,
+        }),
+      ),
+    )
+    expect(header).toHaveAttribute('aria-sort', 'ascending')
+    await user.click(within(header).getByRole('button'))
+    await waitFor(() =>
+      expect(listTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sort: { column: 'amount', order: 'desc' } }),
+      ),
+    )
+  })
 })

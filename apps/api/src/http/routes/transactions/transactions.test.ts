@@ -83,6 +83,23 @@ describe('GET /transactions', () => {
     })
     expect(args.skip).toBe(50)
     expect(args.take).toBe(50)
+    expect(args.orderBy).toEqual([{ date: 'desc' }, { date: 'desc' }, { id: 'asc' }])
+  })
+
+  it('ordena pela coluna pedida, com a categoria vazia por último', async () => {
+    prismaMock.transaction.count.mockResolvedValue(0)
+    prismaMock.transaction.findMany.mockResolvedValue([])
+    await call(getTransactions, { method: 'GET', url: '/transactions?sort=category&order=asc' })
+    expect(prismaMock.transaction.findMany.mock.calls[0][0].orderBy[0]).toEqual({
+      category: { sort: 'asc', nulls: 'last' },
+    })
+    await call(getTransactions, { method: 'GET', url: '/transactions?sort=account&order=desc' })
+    expect(prismaMock.transaction.findMany.mock.calls[1][0].orderBy[0]).toEqual({ account: { name: 'desc' } })
+  })
+
+  it('coluna de ordenação desconhecida dá 400', async () => {
+    const res = await call(getTransactions, { method: 'GET', url: '/transactions?sort=id' })
+    expect(res.statusCode).toBe(400)
   })
 
   it('category=none traz as nulas e totalPages mínimo é 1', async () => {

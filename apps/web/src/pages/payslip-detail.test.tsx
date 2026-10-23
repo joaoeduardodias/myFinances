@@ -105,6 +105,37 @@ describe('PayslipDetail', () => {
     expect(screen.getByText('INSS')).toBeInTheDocument()
   })
 
+  it('keeps the payslip order until a column is clicked', async () => {
+    const user = userEvent.setup()
+    const base = detail()
+    renderPage(
+      detail({
+        lines: [
+          base.lines[0],
+          {
+            ...base.lines[0],
+            id: 'l3',
+            description: 'Adicional',
+            amountCents: 1000,
+            position: 2,
+          },
+        ],
+      }),
+    )
+    const table = (await screen.findByRole('heading', { name: 'Proventos' }))
+      .parentElement as HTMLElement
+    const descriptions = () =>
+      within(table)
+        .getAllByRole('row')
+        .slice(1)
+        .map((r) => within(r).getAllByRole('cell')[0].textContent)
+    expect(descriptions()).toEqual(['Salário', 'Adicional'])
+    await user.click(within(table).getByRole('button', { name: 'Descrição' }))
+    expect(descriptions()).toEqual(['Adicional', 'Salário'])
+    await user.click(within(table).getByRole('button', { name: 'Descrição' }))
+    expect(descriptions()).toEqual(['Salário', 'Adicional'])
+  })
+
   it('shows when the deposit was not found', async () => {
     renderPage(
       detail({ reconciliation: { matched: false, transaction: null } }),

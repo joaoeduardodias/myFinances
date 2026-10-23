@@ -1,4 +1,5 @@
 import {
+  keepPreviousData,
   type QueryKey,
   useMutation,
   useQuery,
@@ -11,6 +12,7 @@ import { toast } from 'sonner'
 
 import { ManualTransactionDialog } from '@/components/manual-transaction-dialog'
 import { NativeSelect } from '@/components/native-select'
+import { SortableHead } from '@/components/sortable-head'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,14 +45,24 @@ import {
   setTransactionTransfer,
   type Transaction,
   type TransactionKind,
+  type TransactionSortColumn,
 } from '@/http/transactions'
 import { formatBRL, formatDate } from '@/lib/format'
 import { currentMonthRange } from '@/lib/period'
+import { type Sort, toggleSort } from '@/lib/sort'
 
 const KINDS: { value: TransactionKind; label: string }[] = [
   { value: 'income', label: 'Entradas' },
   { value: 'expense', label: 'Saídas' },
   { value: 'transfer', label: 'Transferências' },
+]
+
+const SORT_COLUMNS: TransactionSortColumn[] = [
+  'date',
+  'description',
+  'account',
+  'category',
+  'amount',
 ]
 
 const incomeClass = 'text-income'
@@ -71,6 +83,10 @@ export function Transactions() {
   const category = params.get('category') || undefined
   const kind = KINDS.find((k) => k.value === params.get('kind'))?.value
   const page = Math.max(1, Number(params.get('page')) || 1)
+  const sort: Sort<TransactionSortColumn> = {
+    column: SORT_COLUMNS.find((c) => c === params.get('sort')) ?? 'date',
+    order: params.get('order') === 'asc' ? 'asc' : 'desc',
+  }
 
   function setFilter(key: string, value: string) {
     setParams(
@@ -80,6 +96,20 @@ export function Transactions() {
         else next.delete(key)
         next.delete('page')
         return next
+      },
+      { replace: true },
+    )
+  }
+
+  function setSort(column: TransactionSortColumn) {
+    const next = toggleSort(sort, column)
+    setParams(
+      (prev) => {
+        const params = new URLSearchParams(prev)
+        params.set('sort', next.column)
+        params.set('order', next.order)
+        params.delete('page')
+        return params
       },
       { replace: true },
     )
@@ -101,10 +131,12 @@ export function Transactions() {
     queryKey: ['categories'],
     queryFn: listCategories,
   })
-  const filters = { from, to, accountId, category, kind, page }
+  const filters = { from, to, accountId, category, kind, page, sort }
   const list = useQuery({
     queryKey: ['transactions', filters],
     queryFn: () => listTransactions(filters),
+    // Trocar página ou ordenação mantém a tabela na tela até chegar a nova.
+    placeholderData: keepPreviousData,
   })
 
   function invalidate(...keys: QueryKey[]) {
@@ -239,11 +271,35 @@ export function Transactions() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead className="hidden md:table-cell">Conta</TableHead>
-                  <TableHead>Categoria</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
+                  <SortableHead column="date" sort={sort} onSort={setSort}>
+                    Data
+                  </SortableHead>
+                  <SortableHead
+                    column="description"
+                    sort={sort}
+                    onSort={setSort}
+                  >
+                    Descrição
+                  </SortableHead>
+                  <SortableHead
+                    column="account"
+                    sort={sort}
+                    onSort={setSort}
+                    className="hidden md:table-cell"
+                  >
+                    Conta
+                  </SortableHead>
+                  <SortableHead column="category" sort={sort} onSort={setSort}>
+                    Categoria
+                  </SortableHead>
+                  <SortableHead
+                    column="amount"
+                    sort={sort}
+                    onSort={setSort}
+                    className="text-right"
+                  >
+                    Valor
+                  </SortableHead>
                   <TableHead>
                     <span className="sr-only">Ações</span>
                   </TableHead>

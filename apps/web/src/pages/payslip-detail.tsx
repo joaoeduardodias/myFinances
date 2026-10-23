@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 
 import { PayslipLinesEditor } from '@/components/payslip-lines-editor'
 import { PayslipStatusBadge } from '@/components/payslip-status-badge'
+import { SortableHead } from '@/components/sortable-head'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,7 +24,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
@@ -37,8 +37,22 @@ import {
 } from '@/http/payslips'
 import { formatBRL, formatDate } from '@/lib/format'
 import { formatCompetence } from '@/lib/payslip'
+import { type Sort, sortRows, toggleSort } from '@/lib/sort'
+
+type LineSortColumn = 'description' | 'reference' | 'amount'
+
+function lineValue(line: PayslipLine, column: LineSortColumn) {
+  if (column === 'amount') return line.amountCents
+  return line[column]
+}
 
 function LinesTable({ title, lines }: { title: string; lines: PayslipLine[] }) {
+  // Sem ordenação escolhida, mantém a ordem do holerite.
+  const [sort, setSort] = useState<Sort<LineSortColumn> | null>(null)
+  const rows = sort ? sortRows(lines, sort, lineValue) : lines
+  const onSort = (column: LineSortColumn) =>
+    setSort((current) => toggleSort(current, column))
+
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-base font-medium">{title}</h2>
@@ -48,13 +62,24 @@ function LinesTable({ title, lines }: { title: string; lines: PayslipLine[] }) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Descrição</TableHead>
-              <TableHead>Referência</TableHead>
-              <TableHead className="text-right">Valor</TableHead>
+              <SortableHead column="description" sort={sort} onSort={onSort}>
+                Descrição
+              </SortableHead>
+              <SortableHead column="reference" sort={sort} onSort={onSort}>
+                Referência
+              </SortableHead>
+              <SortableHead
+                column="amount"
+                sort={sort}
+                onSort={onSort}
+                className="text-right"
+              >
+                Valor
+              </SortableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {lines.map((l) => (
+            {rows.map((l) => (
               <TableRow key={l.id}>
                 <TableCell>{l.description}</TableCell>
                 <TableCell className="text-muted-foreground">

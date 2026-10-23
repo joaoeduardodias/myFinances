@@ -16,6 +16,14 @@ import {
 
 const PAGE_SIZE = 50
 
+const SORTS = {
+  date: (order) => ({ date: order }),
+  description: (order) => ({ description: order }),
+  account: (order) => ({ account: { name: order } }),
+  category: (order) => ({ category: { sort: order, nulls: 'last' } }),
+  amount: (order) => ({ amountCents: order }),
+} satisfies Record<string, (order: Prisma.SortOrder) => Prisma.TransactionOrderByWithRelationInput>
+
 export async function getTransactions(app: FastifyInstance) {
   app
     .withTypeProvider<ZodTypeProvider>()
@@ -35,6 +43,8 @@ export async function getTransactions(app: FastifyInstance) {
             category: z.string().min(1).optional(),
             kind: z.enum(['income', 'expense', 'transfer']).optional(),
             page: z.coerce.number().int().min(1).default(1),
+            sort: z.enum(Object.keys(SORTS) as [keyof typeof SORTS]).default('date'),
+            order: z.enum(['asc', 'desc']).default('desc'),
           }),
           response: {
             200: z.object({
@@ -47,7 +57,7 @@ export async function getTransactions(app: FastifyInstance) {
       },
       async (request, reply) => {
         const userId = await request.getCurrentUserId()
-        const { from, to, accountId, category, kind, page } = request.query
+        const { from, to, accountId, category, kind, page, sort, order } = request.query
 
         // Lançamentos de cartão ficam na tela de cartões.
         const where: Prisma.TransactionWhereInput = { userId, account: { type: { not: 'CREDIT' } } }
@@ -65,7 +75,8 @@ export async function getTransactions(app: FastifyInstance) {
           prisma.transaction.findMany({
             select: transactionSelect,
             where,
-            orderBy: [{ date: 'desc' }, { id: 'asc' }],
+            // Desempate estável para a paginação não repetir nem pular linhas.
+            orderBy: [SORTS[sort](order), { date: 'desc' }, { id: 'asc' }],
             skip: (page - 1) * PAGE_SIZE,
             take: PAGE_SIZE,
           }),
