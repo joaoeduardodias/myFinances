@@ -65,11 +65,11 @@ export function extractMessages(payload: unknown, phoneNumberId: string): Incomi
 async function processMessages(
   messages: IncomingMessage[],
   client: ReturnType<typeof createWhatsappClient>,
-  log: Pick<FastifyBaseLogger, 'error'>,
+  log: Pick<FastifyBaseLogger, 'error' | 'info'>,
 ) {
   for (const msg of messages) {
     try {
-      await handleWhatsappMessage(msg, { client })
+      await handleWhatsappMessage(msg, { client, log })
     } catch (error) {
       log.error({ err: error, messageId: msg.id }, 'Falha ao processar mensagem do WhatsApp')
     }

@@ -11,7 +11,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/services/wallet', () => ({ ensureWalletAccount }))
 vi.mock('./save-entry', () => ({ saveWhatsappEntry, undoWhatsappEntry }))
 
-const { handleWhatsappMessage } = await import('./handle-message')
+const { handleWhatsappMessage, phoneVariants } = await import('./handle-message')
 const { resetConversation } = await import('./conversation')
 const { GeminiUnavailableError } = await import('@/lib/gemini/interpret-entry')
 
@@ -36,7 +36,7 @@ beforeEach(() => {
   resetPrismaMocks(prismaMock)
   vi.clearAllMocks()
   resetConversation()
-  prismaMock.user.findUnique.mockResolvedValue({ id: 'u1' })
+  prismaMock.user.findFirst.mockResolvedValue({ id: 'u1' })
   prismaMock.account.findMany.mockResolvedValue(accounts)
   ensureWalletAccount.mockResolvedValue({ id: 'w', name: 'Carteira', type: 'WALLET' })
   saveWhatsappEntry.mockResolvedValue({
@@ -53,10 +53,40 @@ const ask = () =>
     candidateAccountIds: ['a1', 'a2'],
   })
 
+describe('phoneVariants', () => {
+  it('celular BR com 9 ganha a forma sem 9', () => {
+    expect(phoneVariants('5511999999999')).toEqual(['5511999999999', '551199999999'])
+  })
+  it('celular BR sem 9 ganha a forma com 9', () => {
+    expect(phoneVariants('551199999999')).toEqual(['551199999999', '5511999999999'])
+  })
+  it('número fora do Brasil fica igual', () => {
+    expect(phoneVariants('14155550123')).toEqual(['14155550123'])
+  })
+})
+
 describe('handleWhatsappMessage', () => {
-  it('número desconhecido: não responde', async () => {
-    prismaMock.user.findUnique.mockResolvedValue(null)
-    await run({ text: 'almoço 45' })
+  it('acha o usuário cadastrado com 13 dígitos quando from veio com 12', async () => {
+    interpret.mockResolvedValueOnce({ kind: 'entry', draft, accountId: 'a1' })
+    await run({ from: '551199999999', text: 'almoço 45' })
+    expect(prismaMock.user.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { whatsappPhone: { in: ['551199999999', '5511999999999'] } },
+      }),
+    )
+    expect(client.sendText).toHaveBeenCalledWith('551199999999', expect.any(String))
+  })
+
+  it('número desconhecido: não responde e loga só os 4 últimos dígitos', async () => {
+    prismaMock.user.findFirst.mockResolvedValue(null)
+    const log = { info: vi.fn() }
+    await handleWhatsappMessage(
+      { id: 'm1', from: '551199999999', text: 'almoço 45' },
+      { client, interpret, today, now, log },
+    )
+    expect(log.info).toHaveBeenCalledTimes(1)
+    expect(log.info.mock.calls[0][0]).toContain('…9999')
+    expect(log.info.mock.calls[0][0]).not.toContain('5511999')
     expect(client.sendText).not.toHaveBeenCalled()
     expect(interpret).not.toHaveBeenCalled()
   })

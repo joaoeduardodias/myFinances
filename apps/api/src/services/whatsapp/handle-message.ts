@@ -1,3 +1,5 @@
+import type { FastifyBaseLogger } from 'fastify'
+
 import {
   type EntryAccount,
   type EntryDraft,
@@ -45,6 +47,18 @@ type Deps = {
   interpret?: typeof interpretEntry
   today?: IsoDate
   now?: Date
+  log?: Pick<FastifyBaseLogger, 'info'>
+}
+
+/**
+ * A Meta manda o número de muitos celulares brasileiros sem o 9 depois do DDD
+ * (`551199999999`), mas o cadastro costuma ter o 9. Procura pelas duas formas.
+ */
+export function phoneVariants(digits: string): string[] {
+  const variants = [digits]
+  if (/^55\d{2}9\d{8}$/.test(digits)) variants.push(digits.slice(0, 4) + digits.slice(5))
+  else if (/^55\d{2}\d{8}$/.test(digits)) variants.push(`${digits.slice(0, 4)}9${digits.slice(4)}`)
+  return variants
 }
 
 /** Uma mensagem recebida: grava, pergunta a conta ou responde. Erros inesperados sobem. */
@@ -52,11 +66,15 @@ export async function handleWhatsappMessage(msg: IncomingMessage, deps: Deps): P
   const { client } = deps
   const reply = (body: string) => client.sendText(msg.from, body)
 
-  const user = await prisma.user.findUnique({
-    where: { whatsappPhone: msg.from },
+  const user = await prisma.user.findFirst({
+    where: { whatsappPhone: { in: phoneVariants(msg.from) } },
     select: { id: true },
   })
-  if (!user) return
+  if (!user) {
+    // Sem resposta (não revela que o número existe), mas deixa rastro para diagnóstico.
+    deps.log?.info(`Mensagem do WhatsApp de número não cadastrado (…${msg.from.slice(-4)}).`)
+    return
+  }
   const userId = user.id
 
   if (msg.unsupported) return reply(UNSUPPORTED_REPLY)
