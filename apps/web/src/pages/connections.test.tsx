@@ -160,6 +160,27 @@ describe('Connections', () => {
     await waitFor(() => expect(syncConnection).toHaveBeenCalledWith('c1'))
   })
 
+  it('a sync refreshes the cached cards too', async () => {
+    const user = userEvent.setup()
+    vi.mocked(listConnections).mockResolvedValue([conn])
+    vi.mocked(syncConnection).mockResolvedValue(undefined as never)
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    client.setQueryData(['cards'], { cards: [] })
+    render(
+      <QueryClientProvider client={client}>
+        <Connections />
+      </QueryClientProvider>,
+    )
+    await user.click(
+      await screen.findByRole('button', { name: 'Sincronizar Nubank' }),
+    )
+    await waitFor(() =>
+      expect(client.getQueryState(['cards'])?.isInvalidated).toBe(true),
+    )
+  })
+
   it('asks for confirmation before removing', async () => {
     const user = userEvent.setup()
     renderPage()

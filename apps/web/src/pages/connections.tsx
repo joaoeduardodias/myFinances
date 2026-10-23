@@ -62,7 +62,13 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>
 
-const CONNECTION_KEYS = ['connections', 'accounts', 'transactions', 'dashboard']
+const CONNECTION_KEYS = [
+  'connections',
+  'accounts',
+  'transactions',
+  'cards',
+  'dashboard',
+]
 
 function AddConnectionForm() {
   const queryClient = useQueryClient()

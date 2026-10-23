@@ -258,6 +258,35 @@ describe('syncConnection', () => {
     })
   })
 
+  it('cartão de banco conhecido vira "Cartão Crédito <banco>"; desconhecido mantém o nome', async () => {
+    const card: PluggyAccount = {
+      id: 'p-card',
+      type: 'CREDIT',
+      subtype: 'CREDIT_CARD',
+      name: 'ELO MAIS',
+      balance: 0,
+    }
+    const bank = (transferNumber: string) => ({ ...bankAccount, bankData: { transferNumber } })
+
+    await syncConnection('conn-1', {
+      client: makeClient({ listAccounts: vi.fn(async () => [card, bank('237/1544/1-5')]) }),
+      today: TODAY,
+    })
+    expect(prismaMock.account.upsert.mock.calls[0][0].update).toMatchObject({
+      name: 'Cartão Crédito Bradesco',
+    })
+    expect(prismaMock.account.upsert.mock.calls[1][0].update).toMatchObject({
+      name: 'Conta corrente',
+    })
+
+    prismaMock.account.upsert.mockClear()
+    await syncConnection('conn-1', {
+      client: makeClient({ listAccounts: vi.fn(async () => [card, bank('999/1/1')]) }),
+      today: TODAY,
+    })
+    expect(prismaMock.account.upsert.mock.calls[0][0].update).toMatchObject({ name: 'ELO MAIS' })
+  })
+
   it('sem conta bancária, não mexe no código do banco', async () => {
     await syncConnection('conn-1', { client: makeClient(), today: TODAY })
 

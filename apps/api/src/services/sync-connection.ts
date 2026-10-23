@@ -13,6 +13,7 @@ import {
 import { toCents } from '@/lib/finance/money'
 import { pluggy, type PluggyClient } from '@/lib/pluggy/client'
 import { itemErrorText } from '@/lib/pluggy/connection-error'
+import { INSTITUTIONS } from '@/lib/pluggy/institutions'
 import type { PluggyAccount } from '@/lib/pluggy/types'
 import { prisma } from '@/lib/prisma'
 import { type IsoDate, todayIso } from '@/lib/today'
@@ -132,6 +133,14 @@ async function syncAccounts(
   })
   const existingById = new Map(existing.map((a) => [a.pluggyAccountId, a]))
 
+  // O conector MeuPluggy não diz o banco; o número de transferência diz.
+  const institutionCode = remote
+    .map((a) => a.bankData?.transferNumber?.split('/')[0])
+    .find(Boolean)
+  // O nome que a Pluggy dá ao cartão ("gold", "ELO MAIS") não diz de que banco ele é.
+  const institution = institutionCode ? INSTITUTIONS[institutionCode] : undefined
+  const cardName = institution && `Cartão Crédito ${institution.shortName}`
+
   const synced: SyncedAccount[] = []
   for (const account of remote) {
     const current = existingById.get(account.id)
@@ -142,7 +151,7 @@ async function syncAccounts(
     const fields = {
       connectionId,
       type: account.type,
-      name: account.name,
+      name: (account.type === 'CREDIT' && cardName) || account.name,
       number: account.number ?? null,
       // Em conta CREDIT, positivo é o valor devido no cartão (convenção da Pluggy).
       balanceCents: Math.round(account.balance * 100),
@@ -164,10 +173,6 @@ async function syncAccounts(
     synced.push({ id: saved.id, pluggyAccountId: account.id, type: account.type })
   }
 
-  // O conector MeuPluggy não diz o banco; o número de transferência diz.
-  const institutionCode = remote
-    .map((a) => a.bankData?.transferNumber?.split('/')[0])
-    .find(Boolean)
   if (institutionCode) {
     await prisma.connection.update({ where: { id: connectionId }, data: { institutionCode } })
   }

@@ -48,7 +48,7 @@ function DashboardContent({ data }: { data: Dashboard }) {
     : `o fim do mês (${formatDate(windowEnd)})`
 
   return (
-    <div className="grid items-start gap-4 md:grid-cols-2">
+    <div className="grid gap-4 md:grid-cols-2">
       <BanksOverview banks={data.banks} />
       <CardsOverview cards={data.cards} />
 

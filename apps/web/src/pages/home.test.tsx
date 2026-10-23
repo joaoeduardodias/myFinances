@@ -155,6 +155,7 @@ describe('Home', () => {
       '84',
     )
     expect(within(cards).getByText('xxxx 0187')).toBeInTheDocument()
+    expect(within(cards).getByText('R$ 0,00')).toHaveClass('text-destructive')
   })
 
   it('hides the limit bar when no card has a limit', async () => {

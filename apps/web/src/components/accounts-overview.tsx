@@ -17,6 +17,11 @@ function balanceClass(cents: number) {
   return cents < 0 ? 'text-destructive' : 'text-income'
 }
 
+/** No cartão, positivo é o devido (vermelho, mesmo zerado); negativo é crédito a favor. */
+function cardBalanceClass(cents: number) {
+  return cents < 0 ? 'text-income' : 'text-destructive'
+}
+
 /** Logo do banco; sem URL, ou se a imagem não carregar, o ícone genérico. */
 function InstitutionLogo({ group }: { group: BankGroup }) {
   const [failed, setFailed] = useState(false)
@@ -144,7 +149,7 @@ export function CardsOverview({ cards }: { cards: CardsSummary }) {
           Cartões de crédito
         </h2>
         <p
-          className={`text-3xl font-semibold tabular-nums ${cards.totalCents > 0 ? 'text-destructive' : ''}`}
+          className={`text-3xl font-semibold tabular-nums ${cardBalanceClass(cards.totalCents)}`}
         >
           {formatBRL(cards.totalCents)}
         </p>
@@ -193,7 +198,7 @@ export function CardsOverview({ cards }: { cards: CardsSummary }) {
                 )}
               </span>
               <span
-                className={`font-semibold tabular-nums ${card.balanceCents > 0 ? 'text-destructive' : 'text-muted-foreground'}`}
+                className={`font-semibold tabular-nums ${cardBalanceClass(card.balanceCents)}`}
               >
                 {formatBRL(card.balanceCents)}
               </span>
