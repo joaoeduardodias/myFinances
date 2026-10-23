@@ -4,6 +4,12 @@ import { api } from './api'
 
 export type BillStatus = 'CLOSED' | 'OPEN' | 'FUTURE'
 
+export const BILL_STATUS_LABELS: Record<BillStatus, string> = {
+  CLOSED: 'Fechada',
+  OPEN: 'Aberta',
+  FUTURE: 'Futura',
+}
+
 export interface BillTransaction {
   date: IsoDate
   amountCents: number
@@ -36,6 +42,11 @@ export interface CardAccount {
 export interface CardsResponse {
   cards: { account: CardAccount; bills: Bill[] }[]
   cardsMissingCycle: { id: string; name: string }[]
+}
+
+/** A fatura aberta; sem ela, a primeira da lista. */
+export function currentBill(bills: Bill[]): Bill | undefined {
+  return bills.find((b) => b.status === 'OPEN') ?? bills[0]
 }
 
 export function listCards() {

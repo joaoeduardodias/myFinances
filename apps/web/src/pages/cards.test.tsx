@@ -1,13 +1,16 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { type CardsResponse, listCards, updateCardCycle } from '@/http/cards'
 
+import { CardDetail } from './card-detail'
 import { Cards } from './cards'
 
-vi.mock('@/http/cards', () => ({
+vi.mock('@/http/cards', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/http/cards')>()),
   listCards: vi.fn(),
   updateCardCycle: vi.fn(),
 }))
@@ -58,14 +61,19 @@ const data: CardsResponse = {
   cardsMissingCycle: [],
 }
 
-function renderPage(response: CardsResponse = data) {
+function renderPage(response: CardsResponse = data, path = '/cartoes') {
   vi.mocked(listCards).mockResolvedValue(response)
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   return render(
     <QueryClientProvider client={client}>
-      <Cards />
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/cartoes" element={<Cards />} />
+          <Route path="/cartoes/:id" element={<CardDetail />} />
+        </Routes>
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -76,17 +84,38 @@ describe('Cards', () => {
     vi.mocked(updateCardCycle).mockResolvedValue(undefined)
   })
 
-  it('shows the installment as n/total and the bill summary', async () => {
+  it('shows each card with its open bill and opens its entries on click', async () => {
+    const user = userEvent.setup()
     renderPage()
+    const card = await screen.findByRole('link', { name: /Nubank Roxinho/ })
+    expect(card).toHaveTextContent('•••• 1234')
+    expect(card).toHaveTextContent('Fatura aberta')
+    expect(card).toHaveTextContent('R$ 500,00')
+    await user.click(card)
+    expect(
+      await screen.findByRole('heading', { name: 'Nubank Roxinho' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Notebook')).toBeInTheDocument()
+  })
+
+  it('shows the installment as n/total and the bill summary', async () => {
+    renderPage(data, '/cartoes/a1')
     expect(await screen.findByText('Notebook')).toBeInTheDocument()
     expect(screen.getByText('2/10')).toBeInTheDocument()
     expect(screen.getByText('17/10/2026')).toBeInTheDocument()
     expect(screen.getByText('R$ 400,00')).toBeInTheDocument()
   })
 
+  it('says so when the card does not exist', async () => {
+    renderPage(data, '/cartoes/zz')
+    expect(
+      await screen.findByText('Cartão não encontrado.'),
+    ).toBeInTheDocument()
+  })
+
   it('saves the cycle sending closingDay and dueDay', async () => {
     const user = userEvent.setup()
-    renderPage()
+    renderPage(data, '/cartoes/a1')
     await user.click(
       await screen.findByRole('button', {
         name: 'Ajustar fechamento/vencimento de Nubank Roxinho',
