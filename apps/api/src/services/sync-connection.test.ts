@@ -259,7 +259,7 @@ describe('syncConnection', () => {
     })
   })
 
-  it('cartão de banco conhecido vira "Cartão Crédito <banco>"; desconhecido mantém o nome', async () => {
+  it('conta de banco conhecido vira "<tipo> <banco>"; desconhecido mantém o nome', async () => {
     const card: PluggyAccount = {
       id: 'p-card',
       type: 'CREDIT',
@@ -268,17 +268,24 @@ describe('syncConnection', () => {
       balance: 0,
     }
     const bank = (transferNumber: string) => ({ ...bankAccount, bankData: { transferNumber } })
+    const savings: PluggyAccount = {
+      ...bankAccount,
+      id: 'p-savings',
+      subtype: 'SAVINGS_ACCOUNT',
+      name: 'Poupança',
+    }
 
     await syncConnection('conn-1', {
-      client: makeClient({ listAccounts: vi.fn(async () => [card, bank('237/1544/1-5')]) }),
+      client: makeClient({
+        listAccounts: vi.fn(async () => [card, bank('237/1544/1-5'), savings]),
+      }),
       today: TODAY,
     })
-    expect(prismaMock.account.upsert.mock.calls[0][0].update).toMatchObject({
-      name: 'Cartão Crédito Bradesco',
-    })
-    expect(prismaMock.account.upsert.mock.calls[1][0].update).toMatchObject({
-      name: 'Conta corrente',
-    })
+    expect(prismaMock.account.upsert.mock.calls.map((c) => c[0].update.name)).toEqual([
+      'Cartão Crédito Bradesco',
+      'Conta Corrente Bradesco',
+      'Conta Poupança Bradesco',
+    ])
 
     prismaMock.account.upsert.mockClear()
     await syncConnection('conn-1', {

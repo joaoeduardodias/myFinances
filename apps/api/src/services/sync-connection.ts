@@ -137,9 +137,18 @@ async function syncAccounts(
   const institutionCode = remote
     .map((a) => a.bankData?.transferNumber?.split('/')[0])
     .find(Boolean)
-  // O nome que a Pluggy dá ao cartão ("gold", "ELO MAIS") não diz de que banco ele é.
+  // O nome que a Pluggy dá ("gold", "ELO MAIS", "Conta corrente") não diz de que banco
+  // a conta é, e corrente e poupança do mesmo banco pareciam duplicadas.
   const institution = institutionCode ? INSTITUTIONS[institutionCode] : undefined
-  const cardName = institution && `Cartão Crédito ${institution.shortName}`
+  const kindBySubtype: Record<string, string> = {
+    CREDIT_CARD: 'Cartão Crédito',
+    CHECKING_ACCOUNT: 'Conta Corrente',
+    SAVINGS_ACCOUNT: 'Conta Poupança',
+  }
+  const displayName = (account: PluggyAccount) => {
+    const kind = kindBySubtype[account.subtype]
+    return institution && kind ? `${kind} ${institution.shortName}` : account.name
+  }
 
   const synced: SyncedAccount[] = []
   for (const account of remote) {
@@ -151,7 +160,7 @@ async function syncAccounts(
     const fields = {
       connectionId,
       type: account.type,
-      name: (account.type === 'CREDIT' && cardName) || account.name,
+      name: displayName(account),
       number: account.number ?? null,
       // Em conta CREDIT, positivo é o valor devido no cartão (convenção da Pluggy).
       balanceCents: Math.round(account.balance * 100),
