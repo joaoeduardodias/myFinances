@@ -225,6 +225,46 @@ describe('syncConnection', () => {
     expect(call.update).toMatchObject({ closingDay: 29 })
   })
 
+  it('grava o limite do cartão em centavos e nulo quando a Pluggy não manda', async () => {
+    const card: PluggyAccount = {
+      id: 'p-card',
+      type: 'CREDIT',
+      subtype: 'CREDIT_CARD',
+      name: 'Cartão',
+      balance: 800,
+      creditData: { creditLimit: 5847.07 },
+    }
+    const client = makeClient({ listAccounts: vi.fn(async () => [card, bankAccount]) })
+
+    await syncConnection('conn-1', { client, today: TODAY })
+
+    const [cardCall, bankCall] = prismaMock.account.upsert.mock.calls.map((c) => c[0])
+    expect(cardCall.update).toMatchObject({ creditLimitCents: 584707 })
+    expect(bankCall.update).toMatchObject({ creditLimitCents: null })
+  })
+
+  it('grava na conexão o código do banco tirado do número de transferência', async () => {
+    const client = makeClient({
+      listAccounts: vi.fn(async () => [
+        { ...bankAccount, bankData: { transferNumber: '104/4730/589037271-4' } },
+      ]),
+    })
+
+    await syncConnection('conn-1', { client, today: TODAY })
+
+    expect(prismaMock.connection.update).toHaveBeenCalledWith({
+      where: { id: 'conn-1' },
+      data: { institutionCode: '104' },
+    })
+  })
+
+  it('sem conta bancária, não mexe no código do banco', async () => {
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    const datas = prismaMock.connection.update.mock.calls.map((c) => c[0].data)
+    expect(datas.some((d) => 'institutionCode' in d)).toBe(false)
+  })
+
   it('faz upsert da transação com centavos, chave e categoria da Pluggy', async () => {
     await syncConnection('conn-1', { client: makeClient(), today: TODAY })
 

@@ -26,5 +26,6 @@ Monorepo pnpm + Turborepo: `apps/api` (Fastify + Prisma) e `apps/web` (Vite + Re
 - O webhook só liga com `PLUGGY_WEBHOOK_SECRET`.
 - Leitor de holerite espera um PDF de exemplo; quando chegar, criar `POST /payslips/:id/reprocess`.
 - Tema escuro por padrão, com seletor (decisão do João).
+- Início no estilo meu.pluggy: contas por banco (Carteira junto) e cartões em cima, "Quanto posso gastar" embaixo; sem "Saldo hoje" nem "A pagar" (decisão do João). Logos oficiais pelo CDN da Pluggy.
 - Sync serializado por usuário em memória: vale para uma instância só.
 - Melhoria futura: lançamento por WhatsApp ou Telegram.

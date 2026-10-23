@@ -11,6 +11,30 @@ export interface Payable {
   amountCents: number
 }
 
+export interface AccountLine {
+  id: string
+  name: string
+  number: string | null
+  balanceCents: number
+}
+
+export interface BankGroup {
+  key: string
+  kind: 'BANK' | 'WALLET'
+  name: string
+  logoUrl: string | null
+  balanceCents: number
+  accounts: AccountLine[]
+}
+
+export interface CardsSummary {
+  totalCents: number
+  /** Soma dos limites; os cartões sem limite ficam fora dela e de `limitUsedCents`. */
+  limitCents: number | null
+  limitUsedCents: number
+  items: (AccountLine & { creditLimitCents: number | null })[]
+}
+
 export interface Dashboard {
   today: IsoDate
   balanceCents: number
@@ -28,6 +52,8 @@ export interface Dashboard {
   availableCents: number
   perDayCents: number
   cardsMissingCycle: { id: string; name: string }[]
+  banks: { totalCents: number; groups: BankGroup[] }
+  cards: CardsSummary
 }
 
 export function getDashboard() {

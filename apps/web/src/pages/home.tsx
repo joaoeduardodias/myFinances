@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 
+import { BanksOverview, CardsOverview } from '@/components/accounts-overview'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -33,22 +34,24 @@ function Notice({ children }: { children: React.ReactNode }) {
 function DashboardSkeleton() {
   return (
     <div className="grid gap-4 md:grid-cols-2" aria-busy="true">
+      <Skeleton className="h-64" />
+      <Skeleton className="h-64" />
       <Skeleton className="h-40 md:col-span-2" />
-      <Skeleton className="h-32" />
-      <Skeleton className="h-56" />
     </div>
   )
 }
 
 function DashboardContent({ data }: { data: Dashboard }) {
   const { nextIncome, windowEnd } = data
-  const untilDate = nextIncome?.date ?? windowEnd
   const perDayTarget = nextIncome
     ? `${nextIncome.description} (${formatDate(nextIncome.date)})`
     : `o fim do mês (${formatDate(windowEnd)})`
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid items-start gap-4 md:grid-cols-2">
+      <BanksOverview banks={data.banks} />
+      <CardsOverview cards={data.cards} />
+
       <Card className="md:col-span-2">
         <CardHeader>
           <CardDescription>Quanto posso gastar</CardDescription>
@@ -64,48 +67,6 @@ function DashboardContent({ data }: { data: Dashboard }) {
           <p className="text-muted-foreground tabular-nums">
             {`${formatBRL(data.perDayCents)}/dia até ${perDayTarget}`}
           </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardDescription>Saldo hoje</CardDescription>
-          <CardTitle className="text-2xl font-semibold tabular-nums">
-            {formatBRL(data.balanceCents)}
-          </CardTitle>
-        </CardHeader>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardDescription>{`A pagar até ${formatDate(untilDate)}`}</CardDescription>
-          <CardTitle className="text-2xl font-semibold tabular-nums">
-            {formatBRL(data.payableTotalCents)}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {data.payables.length === 0 ? (
-            <p className="text-muted-foreground text-sm">Nada a pagar até lá</p>
-          ) : (
-            <ul className="divide-y text-sm">
-              {data.payables.map((p) => (
-                <li
-                  key={`${p.kind}-${p.refId}`}
-                  className="flex items-baseline gap-3 py-2"
-                >
-                  <span className="text-muted-foreground w-24 shrink-0 tabular-nums sm:w-auto">
-                    {formatDate(p.dueDate)}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate">
-                    {p.description}
-                  </span>
-                  <span className="tabular-nums">
-                    {formatBRL(p.amountCents)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
         </CardContent>
       </Card>
     </div>

@@ -107,6 +107,8 @@ model Connection {
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   pluggyItemId     String    @unique @map("pluggy_item_id")
   connectorName    String    @map("connector_name")
+  /// Código COMPE do banco (104 = Caixa): o conector MeuPluggy não diz qual é.
+  institutionCode  String?   @map("institution_code")
   status           String
   consentExpiresAt DateTime? @map("consent_expires_at")
   lastSyncedAt     DateTime? @map("last_synced_at")
@@ -131,6 +133,7 @@ model Account {
   balanceCents    Int           @map("balance_cents")
   closingDay      Int?          @map("closing_day")
   dueDay          Int?          @map("due_day")
+  creditLimitCents Int?        @map("credit_limit_cents")
   updatedAt       DateTime      @updatedAt @map("updated_at")
   transactions    Transaction[]
   cardBills       CardBill[]

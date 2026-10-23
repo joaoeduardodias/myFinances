@@ -1,19 +1,15 @@
 import { fromDbDate, toDbDate } from '@/lib/db-date'
 import { addDays } from '@/lib/finance/business-days'
 import { type CardBillView, computeCardBills } from '@/lib/finance/card-bills'
-import type { AccountType, ProjectionRecurrence, ProjectionTx } from '@/lib/finance/projection'
+import type { OverviewAccount } from '@/lib/finance/accounts-overview'
+import type { ProjectionRecurrence, ProjectionTx } from '@/lib/finance/projection'
 import { prisma } from '@/lib/prisma'
 import type { IsoDate } from '@/lib/today'
 
 /** Cobre a fatura fechada mais antiga e as parcelas futuras com folga. */
 const SNAPSHOT_WINDOW_DAYS = 400
 
-export type SnapshotAccount = {
-  id: string
-  type: AccountType
-  name: string
-  number: string | null
-  balanceCents: number
+export type SnapshotAccount = OverviewAccount & {
   closingDay: number | null
   dueDay: number | null
 }
@@ -28,7 +24,7 @@ export type FinanceSnapshot = {
 
 /** Tudo que o painel e as faturas precisam do usuário, já no formato das funções puras. */
 export async function loadFinanceSnapshot(userId: string, today: IsoDate): Promise<FinanceSnapshot> {
-  const [accounts, txRows, billRows, recurrenceRows] = await Promise.all([
+  const [accountRows, txRows, billRows, recurrenceRows] = await Promise.all([
     prisma.account.findMany({
       select: {
         id: true,
@@ -36,8 +32,11 @@ export async function loadFinanceSnapshot(userId: string, today: IsoDate): Promi
         name: true,
         number: true,
         balanceCents: true,
+        creditLimitCents: true,
         closingDay: true,
         dueDay: true,
+        connectionId: true,
+        connection: { select: { institutionCode: true } },
       },
       where: { userId },
       orderBy: { name: 'asc' },
@@ -83,6 +82,10 @@ export async function loadFinanceSnapshot(userId: string, today: IsoDate): Promi
     }),
   ])
 
+  const accounts = accountRows.map(({ connection, ...account }) => ({
+    ...account,
+    institutionCode: connection?.institutionCode ?? null,
+  }))
   const rows = txRows.map((r) => ({ ...r, date: fromDbDate(r.date) }))
 
   const cards = accounts.filter((a) => a.type === 'CREDIT')

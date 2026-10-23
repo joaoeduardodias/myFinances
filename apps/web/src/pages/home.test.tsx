@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -39,6 +39,58 @@ const base: Dashboard = {
   availableCents: 70000,
   perDayCents: 4666,
   cardsMissingCycle: [],
+  banks: {
+    totalCents: 100940,
+    groups: [
+      {
+        key: '237',
+        kind: 'BANK',
+        name: 'Bradesco',
+        logoUrl: 'https://cdn.pluggy.ai/assets/connector-icons/203.svg',
+        balanceCents: 55823,
+        accounts: [
+          {
+            id: 'a1',
+            name: 'Banco Bradesco',
+            number: '00029484-5',
+            balanceCents: 55823,
+          },
+          { id: 'a2', name: 'Poupança', number: null, balanceCents: 0 },
+        ],
+      },
+      {
+        key: 'wallet',
+        kind: 'WALLET',
+        name: 'Carteira',
+        logoUrl: null,
+        balanceCents: -1000,
+        accounts: [
+          { id: 'w', name: 'Carteira', number: null, balanceCents: -1000 },
+        ],
+      },
+    ],
+  },
+  cards: {
+    totalCents: 488539,
+    limitCents: 584707,
+    limitUsedCents: 488539,
+    items: [
+      {
+        id: 'k1',
+        name: 'CAIXA ELO MAIS INTERNACIONAL',
+        number: '0187',
+        balanceCents: 423373,
+        creditLimitCents: 500000,
+      },
+      {
+        id: 'k2',
+        name: 'gold',
+        number: '9832',
+        balanceCents: 0,
+        creditLimitCents: 4707,
+      },
+    ],
+  },
 }
 
 function renderHome(data: Partial<Dashboard> = {}) {
@@ -67,9 +119,52 @@ describe('Home', () => {
     expect(
       screen.getByText('R$ 46,66/dia até Salário (05/11/2026)'),
     ).toBeInTheDocument()
-    expect(screen.getByText('R$ 2.500,00')).toBeInTheDocument()
-    expect(screen.getByText('A pagar até 05/11/2026')).toBeInTheDocument()
-    expect(screen.getByText('Cartão Nubank')).toBeInTheDocument()
+  })
+
+  it('shows bank accounts grouped by institution, with share and wallet', async () => {
+    renderHome()
+    const banks = await screen.findByRole('region', {
+      name: 'Contas bancárias',
+    })
+    expect(within(banks).getByText('R$ 1.009,40')).toBeInTheDocument()
+    expect(within(banks).getByText('2 contas · 55,3%')).toBeInTheDocument()
+    // O primeiro é o total do grupo; o segundo, a conta dentro dele.
+    expect(within(banks).getAllByText('R$ 558,23')[0]).toHaveClass(
+      'text-income',
+    )
+    expect(within(banks).getAllByText('-R$ 10,00')[0]).toHaveClass(
+      'text-destructive',
+    )
+    expect(within(banks).getByText('Banco Bradesco')).not.toBeVisible()
+    await userEvent.setup().click(within(banks).getByText('Bradesco'))
+    expect(within(banks).getByText('Banco Bradesco')).toBeVisible()
+  })
+
+  it('shows credit cards with the used share of the limit', async () => {
+    renderHome()
+    const cards = await screen.findByRole('region', {
+      name: 'Cartões de crédito',
+    })
+    expect(within(cards).getByText('R$ 4.885,39')).toHaveClass(
+      'text-destructive',
+    )
+    expect(within(cards).getByText('84% utilizado')).toBeInTheDocument()
+    expect(within(cards).getByText('Limite: R$ 5.847,07')).toBeInTheDocument()
+    expect(within(cards).getByRole('progressbar')).toHaveAttribute(
+      'aria-valuenow',
+      '84',
+    )
+    expect(within(cards).getByText('xxxx 0187')).toBeInTheDocument()
+  })
+
+  it('hides the limit bar when no card has a limit', async () => {
+    renderHome({
+      cards: { ...base.cards, limitCents: null, limitUsedCents: 0 },
+    })
+    const cards = await screen.findByRole('region', {
+      name: 'Cartões de crédito',
+    })
+    expect(within(cards).queryByRole('progressbar')).not.toBeInTheDocument()
   })
 
   it('paints a negative amount as destructive', async () => {
@@ -100,7 +195,6 @@ describe('Home', () => {
       'href',
       '/recorrentes',
     )
-    expect(screen.getByText('A pagar até 31/10/2026')).toBeInTheDocument()
     expect(
       screen.getByText('R$ 46,66/dia até o fim do mês (31/10/2026)'),
     ).toBeInTheDocument()
@@ -113,9 +207,15 @@ describe('Home', () => {
     ).toHaveAttribute('href', '/cartoes')
   })
 
-  it('shows empty state for payables', async () => {
-    renderHome({ payables: [], payableTotalCents: 0 })
-    expect(await screen.findByText('Nada a pagar até lá')).toBeInTheDocument()
+  it('shows empty states without accounts or cards', async () => {
+    renderHome({
+      banks: { totalCents: 0, groups: [] },
+      cards: { totalCents: 0, limitCents: null, limitUsedCents: 0, items: [] },
+    })
+    expect(
+      await screen.findByText('Nenhuma conta conectada.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Nenhum cartão de crédito.')).toBeInTheDocument()
   })
 
   it('offers retry on error', async () => {

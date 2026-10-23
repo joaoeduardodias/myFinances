@@ -146,6 +146,10 @@ async function syncAccounts(
       number: account.number ?? null,
       // Em conta CREDIT, positivo é o valor devido no cartão (convenção da Pluggy).
       balanceCents: Math.round(account.balance * 100),
+      creditLimitCents:
+        account.creditData?.creditLimit != null
+          ? Math.round(account.creditData.creditLimit * 100)
+          : null,
     }
     const saved = await prisma.account.upsert({
       where: { pluggyAccountId: account.id, userId },
@@ -158,6 +162,14 @@ async function syncAccounts(
       },
     })
     synced.push({ id: saved.id, pluggyAccountId: account.id, type: account.type })
+  }
+
+  // O conector MeuPluggy não diz o banco; o número de transferência diz.
+  const institutionCode = remote
+    .map((a) => a.bankData?.transferNumber?.split('/')[0])
+    .find(Boolean)
+  if (institutionCode) {
+    await prisma.connection.update({ where: { id: connectionId }, data: { institutionCode } })
   }
   return synced
 }

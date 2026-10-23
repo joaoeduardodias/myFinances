@@ -30,11 +30,23 @@ const bank = {
   name: 'Itaú',
   number: '1234',
   balanceCents: 300000,
+  creditLimitCents: null,
   closingDay: null,
   dueDay: null,
+  connectionId: uuid('conn'),
+  connection: { institutionCode: '341' },
 }
-const card = { ...bank, id: cardId, type: 'CREDIT', name: 'Nubank', balanceCents: -80000, closingDay: 27, dueDay: 3 }
-const noCycle = { ...card, id: noCycleId, name: 'Inter', dueDay: null }
+const card = {
+  ...bank,
+  id: cardId,
+  type: 'CREDIT',
+  name: 'Nubank',
+  balanceCents: -80000,
+  creditLimitCents: 100000,
+  closingDay: 27,
+  dueDay: 3,
+}
+const noCycle = { ...card, id: noCycleId, name: 'Inter', creditLimitCents: null, dueDay: null }
 
 const recurrence = (fields: Record<string, unknown>) => ({
   accountId: bankId,
@@ -106,5 +118,28 @@ describe('GET /dashboard', () => {
     expect(body.perDayCents).toBe(4666)
     expect(body.cardsMissingCycle).toEqual([{ id: noCycleId, name: 'Inter' }])
     expect(prismaMock.account.findMany.mock.calls[0][0].where).toEqual({ userId: userA })
+  })
+
+  it('devolve as contas por banco e os cartões com o limite', async () => {
+    const app = await buildTestApp(getDashboard)
+    const token = await signToken(app, { sub: userA })
+    const response = await app.inject({ method: 'GET', url: '/dashboard', headers: authHeaders(token) })
+
+    const { banks, cards } = response.json()
+    expect(banks).toEqual({
+      totalCents: 300000,
+      groups: [
+        {
+          key: '341',
+          kind: 'BANK',
+          name: 'Itaú',
+          logoUrl: null,
+          balanceCents: 300000,
+          accounts: [{ id: bankId, name: 'Itaú', number: '1234', balanceCents: 300000 }],
+        },
+      ],
+    })
+    expect(cards).toMatchObject({ totalCents: -160000, limitCents: 100000, limitUsedCents: -80000 })
+    expect(cards.items.map((c: { id: string }) => c.id)).toEqual([cardId, noCycleId])
   })
 })

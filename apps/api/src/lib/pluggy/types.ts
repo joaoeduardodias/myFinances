@@ -18,6 +18,8 @@ export type PluggyAccount = {
   number?: string
   balance: number
   creditData?: { balanceDueDate?: string; creditLimit?: number } | null
+  /** `transferNumber` é `banco/agência/conta`, com o código COMPE do banco. */
+  bankData?: { transferNumber?: string | null } | null
 }
 
 export type PluggyTransaction = {
