@@ -24,6 +24,8 @@ export const env = createEnv({
     PLUGGY_BASE_URL: z.url().default('https://api.pluggy.ai'),
     /** Ausente = webhook desligado — ver `webhook-secret.ts`. */
     PLUGGY_WEBHOOK_SECRET: webhookSecretSchema,
+    /** Ausente = lançamentos por WhatsApp não interpretam texto/foto. */
+    GEMINI_API_KEY: z.string().optional(),
     S3_ENDPOINT: z.url(),
     S3_REGION: z.string().default('auto'),
     S3_BUCKET: z.string(),
