@@ -36,6 +36,8 @@ describe('detectAndStoreRecurrences', () => {
       userId: USER,
       isTransfer: false,
       date: { gte: new Date('2026-04-25T00:00:00Z'), lte: new Date('2026-10-22T00:00:00Z') },
+      // Lançamento do WhatsApp é provisório: a transação da Pluggy é que conta.
+      NOT: { source: 'MANUAL', whatsappMessageId: { not: null } },
     })
     expect(prismaMock.recurrence.findMany.mock.calls[0][0].where).toEqual({ userId: USER })
     expect(prismaMock.recurrence.createMany).toHaveBeenCalledWith({

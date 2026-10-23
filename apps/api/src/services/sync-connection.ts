@@ -11,6 +11,7 @@ import {
   isCardPaymentCreditDescription,
   isWithdrawalDescription,
 } from '@/lib/finance/detect-transfers'
+import { type MatchCandidate, pickEntryMatch } from '@/lib/finance/match-entry'
 import { toCents } from '@/lib/finance/money'
 import { type PluggyClient, pluggy } from '@/lib/pluggy/client'
 import { itemErrorText } from '@/lib/pluggy/connection-error'
@@ -28,6 +29,9 @@ const FIRST_SYNC_DAYS = 365
 const RESYNC_OVERLAP_DAYS = 30
 const TRANSFER_WINDOW_DAYS = 90
 const CLOSING_DAYS_BEFORE_DUE = 7
+
+/** Lançamento do WhatsApp: provisório até a transação da Pluggy chegar e tomar o lugar dele. */
+const WHATSAPP_ENTRY = { source: 'MANUAL', whatsappMessageId: { not: null } } as const
 
 type SyncedAccount = { id: string; pluggyAccountId: string; type: 'BANK' | 'CREDIT' }
 
@@ -219,9 +223,35 @@ async function syncTransactions(
     // Ler antes para saber de quem é a linha e se a categoria está travada.
     const existing = await prisma.transaction.findMany({
       where: { pluggyTransactionId: { in: remote.map((t) => t.id) } },
-      select: { pluggyTransactionId: true, userId: true, categoryLocked: true, accountId: true },
+      select: {
+        pluggyTransactionId: true,
+        userId: true,
+        categoryLocked: true,
+        descriptionLocked: true,
+        accountId: true,
+      },
     })
     const existingById = new Map(existing.map((t) => [t.pluggyTransactionId, t]))
+
+    // Depois do `removeTransactions`: o que ele devolve a lançamento já casa aqui.
+    const manuals = await prisma.transaction.findMany({
+      where: { userId, accountId: account.id, ...WHATSAPP_ENTRY },
+      select: {
+        id: true,
+        accountId: true,
+        amountCents: true,
+        date: true,
+        createdAt: true,
+        description: true,
+        descriptionKey: true,
+        whatsappMessageId: true,
+        category: true,
+        categoryLocked: true,
+      },
+    })
+    const manualById = new Map(manuals.map((m) => [m.id, m]))
+    // Cada lançamento casa com uma transação só: o usado sai da lista.
+    let candidates: MatchCandidate[] = manuals.map((m) => ({ ...m, date: fromDbDate(m.date) }))
 
     for (const tx of remote) {
       const current = existingById.get(tx.id)
@@ -233,22 +263,52 @@ async function syncTransactions(
       const key = descriptionKey(tx.description)
       // Chave vazia (descrição só de dígitos/prefixo) não casa com regra.
       const category = (key && ruleByKey.get(key)) || mapPluggyCategory(tx.category)
+      const date = pluggyDate(tx.date)
+      const amountCents = toCents(tx.amount, tx.type)
+      const described = { description: tx.description, descriptionKey: key }
       const fields = {
         // Um item renovado traz contas novas com as mesmas transações.
         accountId: account.id,
-        date: toDbDate(pluggyDate(tx.date)),
-        description: tx.description,
-        descriptionKey: key,
-        amountCents: toCents(tx.amount, tx.type),
+        date: toDbDate(date),
+        amountCents,
         status: tx.status,
         pluggyCategory: tx.category ?? null,
         installmentNumber: tx.creditCardMetadata?.installmentNumber ?? null,
         totalInstallments: tx.creditCardMetadata?.totalInstallments ?? null,
       }
+      const create = { ...fields, ...described, userId, pluggyTransactionId: tx.id, source: 'PLUGGY', category } as const
+
+      const matchId = current ? null : pickEntryMatch({ accountId: account.id, amountCents, date }, candidates)
+      const match = matchId ? manualById.get(matchId) : undefined
+      if (match) {
+        // O lançamento vira a transação da Pluggy com o nome que o usuário deu;
+        // ficar com os dois contaria o gasto duas vezes.
+        candidates = candidates.filter((c) => c.id !== match.id)
+        await prisma.$transaction(async (db) => {
+          // Apagar antes: `whatsappMessageId` é único.
+          await db.transaction.delete({ where: { id: match.id } })
+          await db.transaction.create({
+            data: {
+              ...create,
+              description: match.description,
+              descriptionKey: match.descriptionKey,
+              whatsappMessageId: match.whatsappMessageId,
+              descriptionLocked: true,
+              ...(match.categoryLocked ? { category: match.category, categoryLocked: true } : {}),
+            },
+          })
+        })
+        continue
+      }
+
       await prisma.transaction.upsert({
         where: { pluggyTransactionId: tx.id, userId },
-        create: { ...fields, userId, pluggyTransactionId: tx.id, source: 'PLUGGY', category },
-        update: { ...fields, ...(current?.categoryLocked ? {} : { category }) },
+        create,
+        update: {
+          ...fields,
+          ...(current?.descriptionLocked ? {} : described),
+          ...(current?.categoryLocked ? {} : { category }),
+        },
       })
     }
   }
@@ -342,7 +402,8 @@ async function syncBills(client: PluggyClient, accounts: SyncedAccount[], userId
 
 async function pairTransfers(userId: string, today: IsoDate, windowDays: number) {
   const rows = await prisma.transaction.findMany({
-    where: { userId, date: { gte: toDbDate(addDays(today, -windowDays)) } },
+    // Lançamento do WhatsApp não pareia: a transação da Pluggy vai tomar o lugar dele.
+    where: { userId, date: { gte: toDbDate(addDays(today, -windowDays)) }, NOT: WHATSAPP_ENTRY },
     select: {
       id: true,
       accountId: true,

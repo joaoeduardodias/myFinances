@@ -14,6 +14,8 @@ export async function detectAndStoreRecurrences(
       userId,
       isTransfer: false,
       date: { gte: toDbDate(addDays(today, -WINDOW_DAYS)), lte: toDbDate(today) },
+      // Lançamento do WhatsApp é provisório: a transação da Pluggy é que conta.
+      NOT: { source: 'MANUAL', whatsappMessageId: { not: null } },
     },
     select: {
       accountId: true,

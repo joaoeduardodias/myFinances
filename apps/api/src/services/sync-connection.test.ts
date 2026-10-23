@@ -95,8 +95,10 @@ let existingTxs: {
   userId: string
   categoryLocked: boolean
   accountId: string
+  descriptionLocked?: boolean
 }[]
 let pairingRows: PairingRow[]
+let manualRows: ManualRow[]
 let removedRows: { id: string; transferPair: unknown; transferPairOf: unknown }[]
 
 beforeEach(() => {
@@ -104,6 +106,7 @@ beforeEach(() => {
   prismaMock.$transaction.mockImplementation((callback) => callback(prismaMock))
   existingTxs = []
   pairingRows = []
+  manualRows = []
   removedRows = []
 
   prismaMock.connection.findUnique.mockResolvedValue({ ...connection })
@@ -118,13 +121,16 @@ beforeEach(() => {
   )
   prismaMock.account.update.mockResolvedValue({})
   prismaMock.categoryRule.findMany.mockResolvedValue([])
-  // A leitura antes do upsert pede `in`; a das que sumiram da Pluggy, `notIn`.
+  // A leitura antes do upsert pede `in`; a das que sumiram da Pluggy, `notIn`;
+  // a dos lançamentos do WhatsApp, `whatsappMessageId`.
   prismaMock.transaction.findMany.mockImplementation(async ({ where }) =>
     where.pluggyTransactionId?.in
       ? existingTxs
       : where.pluggyTransactionId?.notIn
         ? removedRows
-        : pairingRows,
+        : where.whatsappMessageId
+          ? manualRows
+          : pairingRows,
   )
   prismaMock.transaction.upsert.mockResolvedValue({})
   prismaMock.transaction.update.mockResolvedValue({})
@@ -135,6 +141,7 @@ beforeEach(() => {
   prismaMock.transaction.aggregate.mockResolvedValue({ _sum: { amountCents: 0 } })
   prismaMock.cardBill.upsert.mockResolvedValue({})
   prismaMock.transaction.deleteMany.mockResolvedValue({ count: 0 })
+  prismaMock.transaction.delete.mockResolvedValue({})
   detectAndStoreRecurrencesMock.mockReset()
   detectAndStoreRecurrencesMock.mockResolvedValue(0)
 })
@@ -390,6 +397,144 @@ describe('syncConnection', () => {
     expect(call.update.pluggyCategory).toBe('Food delivery')
   })
 
+  it('não sobrescreve descrição travada', async () => {
+    existingTxs = [
+      {
+        pluggyTransactionId: 'p-tx-1',
+        userId: USER,
+        categoryLocked: false,
+        accountId: 'db-p-acc-new',
+        descriptionLocked: true,
+      },
+    ]
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    const call = prismaMock.transaction.upsert.mock.calls[0][0]
+    expect(call.update).not.toHaveProperty('description')
+    expect(call.update).not.toHaveProperty('descriptionKey')
+    expect(call.update).toMatchObject({ amountCents: -4290, category: 'Alimentação' })
+  })
+
+  it('transação nova casa com lançamento do WhatsApp e herda a descrição', async () => {
+    manualRows = [manual({ id: 'manual-1', amountCents: -4500, description: 'Almoço', whatsappMessageId: 'wamid.1' })]
+    const client = makeClient({
+      listTransactions: vi.fn(async () => [
+        pluggyTx({ date: TODAY, description: 'PIX ENVIADO RESTAURANTE X', amount: 45 }),
+      ]),
+    })
+
+    await syncConnection('conn-1', { client, today: TODAY })
+
+    const manualQuery = prismaMock.transaction.findMany.mock.calls.find(
+      ([args]) => args.where.whatsappMessageId,
+    )?.[0]
+    expect(manualQuery.where).toEqual({
+      userId: USER,
+      accountId: 'db-p-acc-new',
+      source: 'MANUAL',
+      whatsappMessageId: { not: null },
+    })
+    expect(prismaMock.transaction.delete).toHaveBeenCalledWith({ where: { id: 'manual-1' } })
+    expect(prismaMock.transaction.upsert).not.toHaveBeenCalled()
+    expect(prismaMock.transaction.create).toHaveBeenCalledTimes(1)
+    expect(prismaMock.transaction.create.mock.calls[0][0].data).toMatchObject({
+      userId: USER,
+      accountId: 'db-p-acc-new',
+      pluggyTransactionId: 'p-tx-1',
+      source: 'PLUGGY',
+      amountCents: -4500,
+      description: 'Almoço',
+      descriptionKey: 'almoco',
+      descriptionLocked: true,
+      whatsappMessageId: 'wamid.1',
+      category: 'Alimentação',
+    })
+    expect(prismaMock.transaction.create.mock.calls[0][0].data).not.toHaveProperty('categoryLocked')
+    // Apaga antes de criar: `whatsappMessageId` é único.
+    expect(prismaMock.transaction.delete.mock.invocationCallOrder[0]).toBeLessThan(
+      prismaMock.transaction.create.mock.invocationCallOrder[0],
+    )
+  })
+
+  it('lançamento com categoria travada passa a categoria para a transação da Pluggy', async () => {
+    manualRows = [manual({ category: 'Lazer', categoryLocked: true })]
+    const client = makeClient({
+      listTransactions: vi.fn(async () => [pluggyTx({ date: TODAY, amount: 45 })]),
+    })
+
+    await syncConnection('conn-1', { client, today: TODAY })
+
+    expect(prismaMock.transaction.create.mock.calls[0][0].data).toMatchObject({
+      category: 'Lazer',
+      categoryLocked: true,
+    })
+  })
+
+  it('dois lançamentos iguais casam com duas transações diferentes', async () => {
+    manualRows = [
+      manual({ id: 'manual-1', amountCents: -800, whatsappMessageId: 'wamid.1' }),
+      manual({ id: 'manual-2', amountCents: -800, whatsappMessageId: 'wamid.2' }),
+    ]
+    const client = makeClient({
+      listTransactions: vi.fn(async () => [
+        pluggyTx({ id: 'p-tx-1', date: TODAY, amount: 8 }),
+        pluggyTx({ id: 'p-tx-2', date: TODAY, amount: 8 }),
+      ]),
+    })
+
+    await syncConnection('conn-1', { client, today: TODAY })
+
+    const deleted = prismaMock.transaction.delete.mock.calls.map(([args]) => args.where.id)
+    expect(deleted).toHaveLength(2)
+    expect(new Set(deleted)).toEqual(new Set(['manual-1', 'manual-2']))
+    const wamids = prismaMock.transaction.create.mock.calls.map(([args]) => args.data.whatsappMessageId)
+    expect(new Set(wamids)).toEqual(new Set(['wamid.1', 'wamid.2']))
+  })
+
+  it('transação que já existe não casa com lançamento do WhatsApp', async () => {
+    existingTxs = [
+      { pluggyTransactionId: 'p-tx-1', userId: USER, categoryLocked: false, accountId: 'db-p-acc-new' },
+    ]
+    manualRows = [manual({ amountCents: -4290, date: new Date('2026-10-10T00:00:00Z') })]
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    expect(prismaMock.transaction.delete).not.toHaveBeenCalled()
+    expect(prismaMock.transaction.upsert).toHaveBeenCalledTimes(1)
+  })
+
+  it('transação sem lançamento parecido segue o upsert normal', async () => {
+    manualRows = [manual({ amountCents: -4291 })]
+    const client = makeClient({
+      listTransactions: vi.fn(async () => [pluggyTx({ date: TODAY, amount: 45 })]),
+    })
+
+    await syncConnection('conn-1', { client, today: TODAY })
+
+    expect(prismaMock.transaction.delete).not.toHaveBeenCalled()
+    expect(prismaMock.transaction.upsert).toHaveBeenCalledTimes(1)
+  })
+
+  it('manuais do WhatsApp são lidos depois de apagar o que sumiu da Pluggy', async () => {
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    const calls = prismaMock.transaction.findMany.mock.calls
+    const removedIndex = calls.findIndex(([args]) => args.where.pluggyTransactionId?.notIn)
+    const manualIndex = calls.findIndex(([args]) => args.where.whatsappMessageId)
+    expect(removedIndex).toBeGreaterThanOrEqual(0)
+    expect(manualIndex).toBeGreaterThan(removedIndex)
+  })
+
+  it('manual do WhatsApp fica fora do pareamento', async () => {
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    const pairingQuery = prismaMock.transaction.findMany.mock.calls.find(
+      ([args]) => isPairingQuery(args.where),
+    )?.[0]
+    expect(pairingQuery.where.NOT).toEqual({ source: 'MANUAL', whatsappMessageId: { not: null } })
+  })
+
   it('faz upsert das faturas do cartão', async () => {
     const card: PluggyAccount = {
       id: 'p-card',
@@ -429,7 +574,7 @@ describe('syncConnection', () => {
     await syncConnection('conn-1', { client: makeClient(), today: TODAY })
 
     const pairingQuery = prismaMock.transaction.findMany.mock.calls.find(
-      ([args]) => !args.where.pluggyTransactionId,
+      ([args]) => isPairingQuery(args.where),
     )?.[0]
     expect(pairingQuery.where.date).toEqual({ gte: new Date('2025-10-22T00:00:00Z') })
   })
@@ -447,7 +592,7 @@ describe('syncConnection', () => {
     await syncConnection('conn-1', { client: makeClient(), today: TODAY })
 
     const pairingQuery = prismaMock.transaction.findMany.mock.calls.find(
-      ([args]) => !args.where.pluggyTransactionId,
+      ([args]) => isPairingQuery(args.where),
     )?.[0]
     expect(pairingQuery.where).toMatchObject({
       userId: USER,
@@ -687,6 +832,40 @@ describe('syncConnection', () => {
     })
   })
 })
+
+type ManualRow = {
+  id: string
+  accountId: string
+  amountCents: number
+  date: Date
+  createdAt: Date
+  description: string
+  descriptionKey: string
+  whatsappMessageId: string
+  category: string | null
+  categoryLocked: boolean
+}
+
+function manual(extra: Partial<ManualRow>): ManualRow {
+  return {
+    id: 'manual-1',
+    accountId: 'db-p-acc-new',
+    amountCents: -4500,
+    date: new Date(`${TODAY}T00:00:00Z`),
+    createdAt: new Date('2026-10-22T15:00:00Z'),
+    description: 'Almoço',
+    descriptionKey: 'almoco',
+    whatsappMessageId: 'wamid.1',
+    category: null,
+    categoryLocked: false,
+    ...extra,
+  }
+}
+
+/** A leitura do pareamento: a única com janela de data e sem filtro por id. */
+function isPairingQuery(where: Record<string, unknown>): boolean {
+  return !where.pluggyTransactionId && !where.whatsappMessageId
+}
 
 function row(extra: Partial<PairingRow>): PairingRow {
   return {
