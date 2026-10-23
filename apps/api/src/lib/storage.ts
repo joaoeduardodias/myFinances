@@ -53,9 +53,9 @@ export async function putFile(
  * caracteres de controle). Sem nada sobrando, cai num nome fixo.
  */
 function sanitizeDownloadName(name: string) {
-  // eslint-disable-next-line no-control-regex
   const cleaned = name
     .toWellFormed()
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: tirar os caracteres de controle é o objetivo.
     .replace(/["\\\u0000-\u001f\u007f]/g, '')
     .trim()
   return cleaned || FALLBACK_DOWNLOAD_NAME

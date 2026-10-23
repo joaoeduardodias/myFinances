@@ -16,7 +16,6 @@ export type ParsedPayslip = {
  * layout da empresa entra aqui quando houver um PDF de exemplo, junto da rota
  * `POST /payslips/:id/reprocess`.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function parsePayslip(pdf: Buffer): ParsedPayslip | null {
+export function parsePayslip(_pdf: Buffer): ParsedPayslip | null {
   return null
 }

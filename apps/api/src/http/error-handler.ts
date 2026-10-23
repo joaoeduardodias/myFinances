@@ -3,7 +3,7 @@ import {
   hasZodFastifySchemaValidationErrors,
   isResponseSerializationError,
 } from 'fastify-type-provider-zod'
-import { z, ZodError } from 'zod'
+import { ZodError, z } from 'zod'
 
 import { databaseReason } from '@/lib/database-reason'
 import { Prisma } from '@/prisma/generated/client'

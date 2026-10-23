@@ -61,7 +61,7 @@ describe('ThemeProvider', () => {
 
     act(() => {
       systemDark = true
-      listeners.forEach((l) => l())
+      for (const l of listeners) l()
     })
 
     expect(document.documentElement).toHaveClass('dark')
@@ -100,7 +100,7 @@ describe('theme-color', () => {
 
     act(() => {
       systemDark = true
-      listeners.forEach((l) => l())
+      for (const l of listeners) l()
     })
 
     expect(themeColors()).toEqual([[null, '#09090b']])

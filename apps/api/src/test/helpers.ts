@@ -1,10 +1,10 @@
 import fastifyCookie from '@fastify/cookie'
 import fastifyJwt from '@fastify/jwt'
-import { fastify, type FastifyInstance } from 'fastify'
+import { type FastifyInstance, fastify } from 'fastify'
 import {
   serializerCompiler,
   validatorCompiler,
-  ZodTypeProvider,
+  type ZodTypeProvider,
 } from 'fastify-type-provider-zod'
 import { vi } from 'vitest'
 

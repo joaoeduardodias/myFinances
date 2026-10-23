@@ -39,7 +39,7 @@ function applyThemeColor(isDark: boolean) {
   const [meta, ...extra] = document.querySelectorAll<HTMLMetaElement>(
     'meta[name="theme-color"]',
   )
-  extra.forEach((m) => m.remove())
+  for (const m of extra) m.remove()
   const target =
     meta ?? document.head.appendChild(document.createElement('meta'))
   target.name = 'theme-color'

@@ -89,11 +89,11 @@ export function Home() {
 
   // Uma sincronização por montagem (o guard evita a duplicada do StrictMode).
   const started = useRef(false)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: roda uma vez; `sync` muda a cada render.
   useEffect(() => {
     if (started.current) return
     started.current = true
     sync.mutate(false)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (

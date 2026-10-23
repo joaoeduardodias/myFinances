@@ -11,7 +11,7 @@ import {
   isWithdrawalDescription,
 } from '@/lib/finance/detect-transfers'
 import { toCents } from '@/lib/finance/money'
-import { pluggy, type PluggyClient } from '@/lib/pluggy/client'
+import { type PluggyClient, pluggy } from '@/lib/pluggy/client'
 import { itemErrorText } from '@/lib/pluggy/connection-error'
 import { INSTITUTIONS } from '@/lib/pluggy/institutions'
 import type { PluggyAccount } from '@/lib/pluggy/types'

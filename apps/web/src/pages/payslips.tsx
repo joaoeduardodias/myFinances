@@ -8,8 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   listPayslips,
-  type Payslip,
   PAYSLIP_TYPE_LABELS,
+  type Payslip,
 } from '@/http/payslips'
 import { formatBRL } from '@/lib/format'
 import { formatCompetence } from '@/lib/payslip'

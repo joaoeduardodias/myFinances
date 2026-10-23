@@ -5,6 +5,7 @@ Monorepo pnpm + Turborepo: `apps/api` (Fastify + Prisma) e `apps/web` (Vite + Re
 ## Comandos
 
 - `pnpm dev` / `pnpm test` / `pnpm lint` / `pnpm build` na raiz; por app: `pnpm --filter @myfinances/api ...` e `pnpm --filter web ...`.
+- Lint e formatação: Biome (`biome.json` na raiz); `pnpm format` aplica. A API fica fora do formatador de propósito (nunca foi formatada; ligar reescreve ~70 arquivos), mas tem lint e a regra contra SQL cru (`config/biome/no-raw-sql.grit`).
 - Migration: `pnpm --filter @myfinances/api db:migrate --name <nome>` (sempre com `--name`).
 - Integração (Postgres real, usa `.env.e2e`): `pnpm --filter @myfinances/api test:integration`.
 - Webhook da Pluggy: `pnpm --filter @myfinances/api pluggy:webhook <https-url>`.

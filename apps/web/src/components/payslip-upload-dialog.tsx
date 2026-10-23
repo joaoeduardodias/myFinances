@@ -24,8 +24,8 @@ import {
   DuplicatePayslipError,
   PAYSLIP_TYPE_LABELS,
   type PayslipType,
-  uploadPayslip,
   type UploadPayslipInput,
+  uploadPayslip,
 } from '@/http/payslips'
 import { zodResolver } from '@/lib/zod-resolver'
 

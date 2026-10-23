@@ -70,7 +70,7 @@ export async function uploadPayslip(app: FastifyInstance) {
         const { fields, file } = await readUpload(request)
 
         const { competence, type } = fieldsSchema.parse(fields)
-        if (!file || !file.buffer.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
+        if (!file?.buffer.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
           throw new BadRequestError(NOT_A_PDF)
         }
 

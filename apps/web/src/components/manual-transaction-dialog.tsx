@@ -118,6 +118,7 @@ export function ManualTransactionDialog() {
             <input
               id="manual-income"
               type="checkbox"
+              // biome-ignore lint/a11y/useAriaPropsForRole: o checkbox nativo já expõe o estado marcado.
               role="switch"
               className="accent-primary size-5"
               {...register('income')}

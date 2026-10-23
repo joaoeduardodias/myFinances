@@ -3,7 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 
 import { auth } from '@/http/middlewares/auth'
-import { pluggy, PluggyNotFoundError } from '@/lib/pluggy/client'
+import { PluggyNotFoundError, pluggy } from '@/lib/pluggy/client'
 import { prisma } from '@/lib/prisma'
 import { syncConnection } from '@/services/sync-connection'
 

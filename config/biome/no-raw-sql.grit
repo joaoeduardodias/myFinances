@@ -1,0 +1,24 @@
+// As variantes `Unsafe` do Prisma recebem SQL como string: qualquer dado do
+// produtor concatenado ali vira injeção. `Prisma.raw` é o mesmo buraco por
+// outro nome — ele marca o texto como SQL literal, fora dos parâmetros.
+// O caminho seguro é o template `Prisma.sql`/`$executeRaw`, onde tudo o que é
+// interpolado vira parâmetro. Hoje o repositório não usa nenhuma das três;
+// a regra existe para que continue assim.
+or {
+  `$obj.$method` where {
+    // Regex: em GritQL `$nome` entre crases é metavariável, não o nome literal.
+    $method <: or { r"^\$queryRawUnsafe$", r"^\$executeRawUnsafe$" },
+    register_diagnostic(
+      span = $method,
+      message = "Use o template `$queryRaw`/`$executeRaw` (parametrizado). As variantes `Unsafe` recebem SQL como string e abrem injeção.",
+      severity = "error"
+    )
+  },
+  `Prisma.raw` as $raw where {
+    register_diagnostic(
+      span = $raw,
+      message = "`Prisma.raw` insere texto cru no SQL, fora dos parâmetros. Use `Prisma.sql` com interpolação, ou `Prisma.join` para listas de valores.",
+      severity = "error"
+    )
+  }
+}

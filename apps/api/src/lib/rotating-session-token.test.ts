@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   generateRefreshToken,
   hashRefreshToken,
-  rotateSession,
   type RotatingSessionStore,
+  rotateSession,
 } from './rotating-session-token'
 
 interface FakeSession {

@@ -72,6 +72,7 @@ describe('storage', () => {
 
       const disposition = signedInput().ResponseContentDisposition as string
       expect(disposition).toMatch(/^attachment; filename="[^"\\\r\n]*"; /)
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: o teste procura caracteres de controle de propósito.
       expect(disposition).not.toMatch(/[\r\n\x00\\]/)
       expect(disposition).toContain('filename="holeriteX-Evil: 1.pdf"')
     })

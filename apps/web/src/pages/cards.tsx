@@ -180,6 +180,7 @@ function BillView({ bill }: { bill: Bill }) {
         <ul className="divide-y rounded-lg border">
           {bill.transactions.map((t, i) => (
             <li
+              // biome-ignore lint/suspicious/noArrayIndexKey: a transação da fatura não tem id; o índice desempata compras iguais no mesmo dia.
               key={`${t.date}-${t.description}-${i}`}
               className="flex items-center justify-between gap-3 p-3 text-sm"
             >

@@ -7,7 +7,7 @@
     "dev": "pnpm db:generate && pnpm env:load tsx watch src/http/server.ts",
     "build": "pnpm db:generate && tsc --noEmit && tsup",
     "test": "pnpm db:generate && pnpm env:load vitest run",
-    "lint": "eslint src --ext .ts",
+    "lint": "biome check src",
     "test:watch": "pnpm db:generate && pnpm env:load vitest",
     "test:integration": "pnpm db:generate && pnpm env:load:e2e vitest run --config vitest.integration.config.ts",
     "start": "pnpm env:load node dist/http/server.js",
@@ -44,39 +44,14 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@myfinances/eslint-config": "workspace:*",
-    "@myfinances/prettier": "workspace:*",
     "@myfinances/ts-config": "workspace:*",
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^24.0.7",
     "dotenv-cli": "^8.0.0",
-    "eslint": "^8.57.1",
     "prisma": "7.5.0",
     "tsup": "^8.5.1",
     "tsx": "^4.20.3",
     "typescript": "^5",
     "vitest": "^2.1.9"
-  },
-  "prettier": "@myfinances/prettier",
-  "eslintConfig": {
-    "extends": [
-      "@myfinances/eslint-config/node"
-    ],
-    "rules": {
-      "prettier/prettier": "off",
-      "no-control-regex": "off",
-      "simple-import-sort/imports": "warn",
-      "no-use-before-define": "warn",
-      "@typescript-eslint/no-unused-vars": [
-        "warn",
-        {
-          "ignoreRestSiblings": true
-        }
-      ],
-      "promise/param-names": "warn",
-      "object-shorthand": "warn",
-      "no-unneeded-ternary": "warn",
-      "lines-between-class-members": "warn"
-    }
   }
 }

@@ -5,9 +5,11 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "format": "biome check --write"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "tsx": "^4.20.3",
     "turbo": "^2.5.4"
   },

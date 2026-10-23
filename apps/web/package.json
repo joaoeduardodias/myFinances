@@ -7,7 +7,7 @@
     "dev": "pnpm env:load vite",
     "build": "pnpm env:load tsc -b && pnpm env:load vite build",
     "preview": "vite preview",
-    "lint": "eslint src --ext .ts,.tsx",
+    "lint": "biome check src",
     "test": "vitest run",
     "env:load": "dotenv -e ../../.env --"
   },
@@ -41,8 +41,6 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@myfinances/eslint-config": "workspace:*",
-    "@myfinances/prettier": "workspace:*",
     "@myfinances/ts-config": "workspace:*",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.6.3",
@@ -54,18 +52,10 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^4.3.4",
     "dotenv-cli": "^8.0.0",
-    "eslint": "^8.57.1",
     "jsdom": "^25.0.1",
-    "prettier-plugin-tailwindcss": "^0.6.13",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "^6.0.7",
     "vitest": "^3.2.6"
-  },
-  "prettier": "@myfinances/prettier",
-  "eslintConfig": {
-    "extends": [
-      "@myfinances/eslint-config/react"
-    ]
   }
 }

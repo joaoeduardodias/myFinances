@@ -10,7 +10,7 @@ import { fastify } from 'fastify'
 import {
   serializerCompiler,
   validatorCompiler,
-  ZodTypeProvider,
+  type ZodTypeProvider,
 } from 'fastify-type-provider-zod'
 
 import { checkDatabaseConnection } from '@/lib/check-database-connection'
