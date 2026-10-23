@@ -55,6 +55,7 @@ function fakeClient(accounts: PluggyAccount[], txs: Record<string, PluggyTransac
     listTransactions: vi.fn(async (accountId: string) => txs[accountId] ?? []),
     listBills: vi.fn(async () => []),
     registerWebhook: vi.fn(async () => undefined),
+    createConnectToken: vi.fn(async () => 'connect-token'),
   }
 }
 

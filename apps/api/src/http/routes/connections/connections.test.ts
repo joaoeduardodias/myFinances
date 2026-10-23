@@ -10,13 +10,14 @@ import {
 
 const prismaMock = makePrismaMock()
 const getItem = vi.fn()
+const createConnectTokenMock = vi.fn()
 const syncConnectionMock = vi.fn()
 const ensureWalletAccountMock = vi.fn()
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/lib/pluggy/client', async (importActual) => ({
   ...(await importActual<typeof import('@/lib/pluggy/client')>()),
-  pluggy: { getItem },
+  pluggy: { getItem, createConnectToken: createConnectTokenMock },
 }))
 vi.mock('@/services/sync-connection', () => ({
   syncConnection: syncConnectionMock,
@@ -30,6 +31,7 @@ vi.mock('@/services/remove-transactions', () => ({
 }))
 
 const { PluggyError, PluggyNotFoundError } = await import('@/lib/pluggy/client')
+const { createConnectToken } = await import('./create-connect-token')
 const { createConnection } = await import('./create-connection')
 const { getConnections } = await import('./get-connections')
 const { deleteConnection } = await import('./delete-connection')
@@ -64,6 +66,7 @@ beforeEach(() => {
 describe('autenticação', () => {
   it('exige token em todas as rotas', async () => {
     const cases = [
+      [createConnectToken, 'POST', '/connections/connect-token'],
       [createConnection, 'POST', '/connections'],
       [getConnections, 'GET', '/connections'],
       [deleteConnection, 'DELETE', `/connections/${connId}`],
@@ -80,6 +83,19 @@ describe('autenticação', () => {
       })
       expect(response.statusCode).toBe(401)
     }
+  })
+})
+
+describe('POST /connections/connect-token', () => {
+  it('gera o token com o usuário como clientUserId e devolve o conector MeuPluggy', async () => {
+    createConnectTokenMock.mockResolvedValue('tok')
+    const response = await call(createConnectToken, {
+      method: 'POST',
+      url: '/connections/connect-token',
+    })
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ accessToken: 'tok', connectorId: 200 })
+    expect(createConnectTokenMock).toHaveBeenCalledWith(userA)
   })
 })
 

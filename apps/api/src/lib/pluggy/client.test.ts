@@ -152,6 +152,15 @@ describe('createPluggyClient', () => {
     })
   })
 
+  it('createConnectToken manda o clientUserId e devolve o accessToken', async () => {
+    const { client, fetch } = setup(() => ({ body: { accessToken: 'connect-1' } }))
+    await expect(client.createConnectToken('user-1')).resolves.toBe('connect-1')
+    const [input, init] = fetch.mock.calls.at(-1)!
+    expect(new URL(String(input)).pathname).toBe('/connect_token')
+    expect((init!.headers as Record<string, string>)['X-API-KEY']).toBe('key-1')
+    expect(JSON.parse(String(init!.body))).toEqual({ options: { clientUserId: 'user-1' } })
+  })
+
   it('404 em getItem vira PluggyNotFoundError', async () => {
     const { client } = setup(() => ({ status: 404, body: { message: 'not found' } }))
 

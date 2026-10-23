@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { RefreshCw, Trash2, TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
+import { PluggyConnect } from 'react-pluggy-connect'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
@@ -29,7 +30,9 @@ import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   type Connection,
+  type ConnectToken,
   createConnection,
+  createConnectToken,
   deleteConnection,
   listConnections,
   syncConnection,
@@ -87,6 +90,20 @@ function AddConnectionForm() {
     formState: { errors },
   } = useForm<FormData>({ resolver: zodResolver(schema) })
 
+  const [connectToken, setConnectToken] = useState<ConnectToken | null>(null)
+
+  const openWidget = useMutation({
+    mutationFn: createConnectToken,
+    onSuccess: setConnectToken,
+    onError: async (error) =>
+      setFormError(
+        await getApiErrorMessage(
+          error,
+          'Não foi possível abrir o Meu Pluggy. Tente novamente.',
+        ),
+      ),
+  })
+
   const create = useMutation({
     mutationFn: (itemId: string) => createConnection(itemId),
     onSuccess: async () => {
@@ -123,11 +140,44 @@ function AddConnectionForm() {
         <ol className="list-decimal space-y-1 pl-5 text-sm">
           <li>Conecte seus bancos em meu.pluggy.ai.</li>
           <li>
-            No Dashboard da Pluggy, abra Applications → sua aplicação → Demo →
-            Connect Account → MeuPluggy.
+            Clique em Conectar com Meu Pluggy e autorize o banco que quer
+            trazer.
           </li>
-          <li>Copie o itemId de cada banco e cole aqui.</li>
         </ol>
+
+        <Button
+          className="self-start"
+          disabled={openWidget.isPending || create.isPending}
+          onClick={() => {
+            setFormError(null)
+            openWidget.mutate()
+          }}
+        >
+          Conectar com Meu Pluggy
+        </Button>
+
+        {connectToken && (
+          <PluggyConnect
+            connectToken={connectToken.accessToken}
+            connectorIds={[connectToken.connectorId]}
+            selectedConnectorId={connectToken.connectorId}
+            onSuccess={({ item }) => {
+              setConnectToken(null)
+              create.mutate(item.id)
+            }}
+            onClose={() => setConnectToken(null)}
+            onLoadError={() => {
+              setConnectToken(null)
+              setFormError(
+                'Não foi possível abrir o Meu Pluggy. Tente novamente.',
+              )
+            }}
+          />
+        )}
+
+        <p className="text-muted-foreground text-sm">
+          Se preferir, cole o itemId do Dashboard da Pluggy.
+        </p>
 
         <form
           noValidate

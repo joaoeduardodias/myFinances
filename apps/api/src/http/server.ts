@@ -30,6 +30,7 @@ import { refreshSession } from './routes/auth/refresh-session'
 import { getCards } from './routes/cards/get-cards'
 import { updateCardCycle } from './routes/cards/update-card-cycle'
 import { getCategories } from './routes/categories/get-categories'
+import { createConnectToken } from './routes/connections/create-connect-token'
 import { createConnection } from './routes/connections/create-connection'
 import { deleteConnection } from './routes/connections/delete-connection'
 import { getConnections } from './routes/connections/get-connections'
@@ -138,6 +139,7 @@ app.register(authenticateWithPassword)
 app.register(refreshSession)
 app.register(logout)
 app.register(getProfile)
+app.register(createConnectToken)
 app.register(createConnection)
 app.register(getConnections)
 app.register(deleteConnection)

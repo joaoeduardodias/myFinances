@@ -40,6 +40,8 @@ export type PluggyClient = {
   listBills(accountId: string): Promise<PluggyBill[]>
   /** Cadastra o webhook de todos os eventos; `headers` voltam em cada chamada. */
   registerWebhook(url: string, headers: Record<string, string>): Promise<void>
+  /** Token curto para o widget Pluggy Connect abrir no navegador. */
+  createConnectToken(clientUserId: string): Promise<string>
 }
 
 export function createPluggyClient(opts: {
@@ -143,6 +145,22 @@ export function createPluggyClient(opts: {
     },
 
     listBills: (accountId) => getAllPages<PluggyBill>('/bills', { accountId }),
+
+    async createConnectToken(clientUserId) {
+      const response = await doFetch(new URL('/connect_token', opts.baseUrl), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-KEY': await apiKey() },
+        body: JSON.stringify({ options: { clientUserId } }),
+      })
+      if (!response.ok) {
+        throw new PluggyError(
+          `Pluggy ${response.status} em /connect_token: ${await readError(response)}`,
+          response.status,
+        )
+      }
+      const { accessToken } = (await response.json()) as { accessToken: string }
+      return accessToken
+    },
 
     async registerWebhook(url, headers) {
       const response = await doFetch(new URL('/webhooks', opts.baseUrl), {

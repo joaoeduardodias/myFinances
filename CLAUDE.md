@@ -13,7 +13,7 @@ Monorepo pnpm + Turborepo: `apps/api` (Fastify + Prisma) e `apps/web` (Vite + Re
 
 ## Decisões de produto
 
-- Meu Pluggy: até 5 conexões, uso pessoal; o item é ligado colando o `itemId`.
+- Meu Pluggy: até 5 conexões, uso pessoal; o item é ligado pelo widget Pluggy Connect travado no conector MeuPluggy (id 200); colar o `itemId` continua como alternativa.
 - A Pluggy atualiza a cada 24h; "Sincronizar" só relê, não força atualização.
 - A projeção vai até o próximo recebimento (decisão do João).
 - Recorrente no cartão não entra em "a pagar".

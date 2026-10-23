@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   type Connection,
   createConnection,
+  createConnectToken,
   deleteConnection,
   listConnections,
   syncConnection,
@@ -17,8 +18,29 @@ import { Connections } from './connections'
 vi.mock('@/http/connections', () => ({
   listConnections: vi.fn(),
   createConnection: vi.fn(),
+  createConnectToken: vi.fn(),
   syncConnection: vi.fn(),
   deleteConnection: vi.fn(),
+}))
+vi.mock('react-pluggy-connect', () => ({
+  PluggyConnect: (props: {
+    connectorIds: number[]
+    onSuccess: (data: { item: { id: string } }) => void
+    onClose: () => void
+  }) => (
+    <div data-testid="pluggy-connect">
+      {props.connectorIds.join(',')}
+      <button
+        type="button"
+        onClick={() => props.onSuccess({ item: { id: UUID } })}
+      >
+        widget ok
+      </button>
+      <button type="button" onClick={props.onClose}>
+        widget fechar
+      </button>
+    </div>
+  ),
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 
@@ -69,11 +91,8 @@ describe('Connections', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByText(
-        'No Dashboard da Pluggy, abra Applications → sua aplicação → Demo → Connect Account → MeuPluggy.',
+        'Clique em Conectar com Meu Pluggy e autorize o banco que quer trazer.',
       ),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByText('Copie o itemId de cada banco e cole aqui.'),
     ).toBeInTheDocument()
     expect(
       screen.getByText('O Meu Pluggy permite até 5 conexões e só uso pessoal.'),
@@ -104,6 +123,54 @@ describe('Connections', () => {
     renderPage()
     const text = await screen.findByText(/Autorização vence em 10\/01\/2099/)
     expect(text).not.toHaveClass('text-destructive')
+  })
+
+  it('opens Meu Pluggy and creates the connection with the returned item', async () => {
+    vi.mocked(createConnectToken).mockResolvedValue({
+      accessToken: 'tok',
+      connectorId: 200,
+    })
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Nubank')
+    await user.click(
+      screen.getByRole('button', { name: 'Conectar com Meu Pluggy' }),
+    )
+    expect(await screen.findByTestId('pluggy-connect')).toHaveTextContent('200')
+    await user.click(screen.getByRole('button', { name: 'widget ok' }))
+    await waitFor(() => expect(createConnection).toHaveBeenCalledWith(UUID))
+    expect(screen.queryByTestId('pluggy-connect')).not.toBeInTheDocument()
+  })
+
+  it('closing Meu Pluggy creates nothing', async () => {
+    vi.mocked(createConnectToken).mockResolvedValue({
+      accessToken: 'tok',
+      connectorId: 200,
+    })
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Nubank')
+    await user.click(
+      screen.getByRole('button', { name: 'Conectar com Meu Pluggy' }),
+    )
+    await user.click(
+      await screen.findByRole('button', { name: 'widget fechar' }),
+    )
+    expect(screen.queryByTestId('pluggy-connect')).not.toBeInTheDocument()
+    expect(createConnection).not.toHaveBeenCalled()
+  })
+
+  it('shows an error when the connect token fails', async () => {
+    vi.mocked(createConnectToken).mockRejectedValue(
+      httpError(502, 'Pluggy fora'),
+    )
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Nubank')
+    await user.click(
+      screen.getByRole('button', { name: 'Conectar com Meu Pluggy' }),
+    )
+    expect(await screen.findByText('Pluggy fora')).toBeInTheDocument()
   })
 
   it('rejects an itemId that is not a uuid without calling the API', async () => {

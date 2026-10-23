@@ -22,6 +22,15 @@ export async function listConnections() {
   return connections
 }
 
+export interface ConnectToken {
+  accessToken: string
+  connectorId: number
+}
+
+export async function createConnectToken() {
+  return api.post('connections/connect-token').json<ConnectToken>()
+}
+
 export async function createConnection(itemId: string) {
   await api.post('connections', {
     json: { itemId },
