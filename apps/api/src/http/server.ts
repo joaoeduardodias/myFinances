@@ -54,6 +54,7 @@ import { getTransactions } from './routes/transactions/get-transactions'
 import { updateTransactionCategory } from './routes/transactions/update-transaction-category'
 import { updateTransactionTransfer } from './routes/transactions/update-transaction-transfer'
 import { registerPluggyWebhook } from './routes/webhooks/pluggy-webhook'
+import { registerWhatsappWebhook } from './routes/webhooks/whatsapp-webhook'
 import { swaggerSchemaTransform, swaggerTransformObject } from './swagger'
 import { trustProxy } from './trusted-proxy'
 
@@ -168,6 +169,23 @@ app.register(deletePayslip)
 // Sem `PLUGGY_WEBHOOK_SECRET` a rota nem existe: um webhook sem segredo seria
 // um endpoint aberto que dispara sincronizações.
 registerPluggyWebhook(app, env.PLUGGY_WEBHOOK_SECRET)
+// Sem as quatro variáveis da Meta e a chave do Gemini a rota nem existe: não há
+// como assinar nem interpretar, e um webhook aberto seria só superfície.
+registerWhatsappWebhook(
+  app,
+  env.WHATSAPP_ACCESS_TOKEN &&
+    env.WHATSAPP_APP_SECRET &&
+    env.WHATSAPP_VERIFY_TOKEN &&
+    env.WHATSAPP_PHONE_NUMBER_ID &&
+    env.GEMINI_API_KEY
+    ? {
+        accessToken: env.WHATSAPP_ACCESS_TOKEN,
+        appSecret: env.WHATSAPP_APP_SECRET,
+        verifyToken: env.WHATSAPP_VERIFY_TOKEN,
+        phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
+      }
+    : undefined,
+)
 
 async function start() {
   try {

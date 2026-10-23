@@ -20,6 +20,7 @@
     "env:load": "dotenv -e ../../.env --",
     "env:load:e2e": "dotenv -e ../../.env.e2e -e ../../.env --",
     "dev:e2e": "pnpm db:generate && pnpm env:load:e2e tsx watch src/http/server.ts",
+    "whatsapp:link": "pnpm env:load tsx src/scripts/link-whatsapp.ts",
     "pluggy:webhook": "pnpm env:load tsx src/scripts/register-pluggy-webhook.ts",
     "postdb:migrate": "pnpm db:generate"
   },

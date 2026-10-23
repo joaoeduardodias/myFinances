@@ -26,6 +26,11 @@ export const env = createEnv({
     PLUGGY_WEBHOOK_SECRET: webhookSecretSchema,
     /** Ausente = lançamentos por WhatsApp não interpretam texto/foto. */
     GEMINI_API_KEY: z.string().optional(),
+    /** WhatsApp Cloud API (Meta): sem as quatro, a rota do webhook não existe. */
+    WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+    WHATSAPP_APP_SECRET: z.string().optional(),
+    WHATSAPP_VERIFY_TOKEN: z.string().optional(),
+    WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
     S3_ENDPOINT: z.url(),
     S3_REGION: z.string().default('auto'),
     S3_BUCKET: z.string(),
