@@ -43,21 +43,41 @@ export function takePending(userId: string, now: Date = new Date()): PendingEntr
 }
 
 // Palavras que quase toda conta tem; não identificam qual é.
-const GENERIC_WORDS = new Set(['conta', 'corrente', 'poupanca', 'cartao', 'banco', 'de', 'do', 'da'])
+const GENERIC_WORDS = new Set([
+  'conta',
+  'corrente',
+  'banco',
+  'cartao',
+  'credito',
+  'do',
+  'da',
+  'de',
+  'no',
+  'na',
+])
 
-/** O número da opção ou o nome da conta; ambíguo ou desconhecido → `null`. */
+const MAX_ANSWER_WORDS = 3
+
+const words = (text: string) => text.split(/[^a-z0-9]+/).filter(Boolean)
+
+/**
+ * O número da opção ou o nome da conta, e só isso: uma mensagem nova ("café 5
+ * itau") não pode ser tomada por resposta. Ambíguo ou desconhecido → `null`.
+ */
 export function resolveAccountAnswer(text: string, options: AccountOption[]): string | null {
+  const trimmed = text.trim()
+  if (/^\d+$/.test(trimmed)) return options[Number(trimmed) - 1]?.accountId ?? null
+
   const answer = normalize(text)
-  if (!answer) return null
+  if (!answer || /\d/.test(answer)) return null
+  const answerWords = words(answer)
+  if (answerWords.length > MAX_ANSWER_WORDS) return null
+  const distinctive = answerWords.filter((w) => !GENERIC_WORDS.has(w))
+  if (!distinctive.length) return null
 
-  if (/^\d+$/.test(answer)) return options[Number(answer) - 1]?.accountId ?? null
-
-  const answerWords = answer.split(/[^a-z0-9]+/)
   const matches = options.filter((option) => {
-    const label = normalize(option.label)
-    if (label.includes(answer)) return true
-    const distinctive = label.split(/[^a-z0-9]+/).filter((w) => w && !GENERIC_WORDS.has(w))
-    return distinctive.some((word) => answerWords.includes(word))
+    const labelWords = words(normalize(option.label))
+    return distinctive.every((w) => labelWords.includes(w))
   })
   return matches.length === 1 ? matches[0].accountId : null
 }

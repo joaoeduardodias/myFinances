@@ -55,4 +55,6 @@ export function undoReply(r: UndoResult) {
 }
 
 export const UNSUPPORTED_REPLY = 'Por enquanto só entendo texto e foto de comprovante.'
+export const CANCELLED_REPLY = 'Cancelado.'
+export const ERROR_REPLY = 'Deu um erro aqui e não salvei. Tenta de novo em instantes.'
 export const GEMINI_DOWN_REPLY = 'Não consegui entender agora, tenta de novo em instantes.'

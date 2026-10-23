@@ -21,6 +21,8 @@ import {
 } from './conversation'
 import {
   askAccountReply,
+  CANCELLED_REPLY,
+  ERROR_REPLY,
   GEMINI_DOWN_REPLY,
   renamedReply,
   savedReply,
@@ -75,14 +77,33 @@ export async function handleWhatsappMessage(msg: IncomingMessage, deps: Deps): P
     deps.log?.info(`Mensagem do WhatsApp de número não cadastrado (…${msg.from.slice(-4)}).`)
     return
   }
-  const userId = user.id
+
+  try {
+    return await processMessage(msg, deps, user.id)
+  } catch (error) {
+    // Sem resposta o usuário acharia que salvou; o aviso é best effort e o
+    // erro sobe para o webhook registrar.
+    try {
+      await reply(ERROR_REPLY)
+    } catch {}
+    throw error
+  }
+}
+
+async function processMessage(msg: IncomingMessage, deps: Deps, userId: string): Promise<void> {
+  const { client } = deps
+  const reply = (body: string) => client.sendText(msg.from, body)
 
   if (msg.unsupported) return reply(UNSUPPORTED_REPLY)
 
   const today = deps.today ?? todayIso()
   const text = msg.text?.trim()
 
+  // Pendente vivo + "desfazer": cancela o pendente; apagar o lançamento
+  // anterior seria apagar o que o usuário não quis dizer.
+  const pending = takePending(userId, deps.now)
   if (text && isUndo(text)) {
+    if (pending) return reply(CANCELLED_REPLY)
     return reply(undoReply(await undoWhatsappEntry(userId, lastEntry(userId))))
   }
 
@@ -97,7 +118,6 @@ export async function handleWhatsappMessage(msg: IncomingMessage, deps: Deps): P
   }
 
   // Um pendente só vale para a próxima mensagem; se ela não responde, é nova.
-  const pending = takePending(userId, deps.now)
   if (pending && text) {
     const accountId = resolveAccountAnswer(text, pending.options)
     if (accountId) return save(pending.draft, accountId, pending.messageId)
@@ -114,7 +134,7 @@ export async function handleWhatsappMessage(msg: IncomingMessage, deps: Deps): P
       ensureWalletAccount(userId),
     ])
     const accounts: EntryAccount[] = [
-      ...dbAccounts,
+      ...dbAccounts.filter((a) => a.type !== 'WALLET'),
       { id: wallet.id, name: wallet.name, type: 'WALLET' },
     ]
 
@@ -124,10 +144,11 @@ export async function handleWhatsappMessage(msg: IncomingMessage, deps: Deps): P
     if (result.kind === 'entry') return save(result.draft, result.accountId, msg.id)
 
     if (result.kind === 'ask_account') {
+      // A Carteira entra uma vez só, sempre por último.
       const options: AccountOption[] = []
-      for (const id of result.candidateAccountIds) {
+      for (const id of new Set(result.candidateAccountIds)) {
         const account = accounts.find((a) => a.id === id)
-        if (account) options.push({ accountId: id, label: account.name })
+        if (account && account.type !== 'WALLET') options.push({ accountId: id, label: account.name })
       }
       options.push({ accountId: wallet.id, label: 'Dinheiro (Carteira)' })
       setPending(userId, {

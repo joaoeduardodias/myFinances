@@ -108,6 +108,35 @@ describe('handleWhatsappMessage', () => {
     expect(client.sendText).toHaveBeenLastCalledWith('5511', '🗑️ Apagado.')
   })
 
+  it('desfazer com pendente vivo cancela o pendente e não apaga nada', async () => {
+    ask()
+    await run({ text: 'almoço 45' })
+    await run({ id: 'm2', text: 'desfazer' })
+    expect(undoWhatsappEntry).not.toHaveBeenCalled()
+    expect(client.sendText).toHaveBeenLastCalledWith('5511', 'Cancelado.')
+    interpret.mockResolvedValueOnce({ kind: 'not_understood', reply: 'Quanto foi?' })
+    await run({ id: 'm3', text: '1' })
+    expect(saveWhatsappEntry).not.toHaveBeenCalled()
+    expect(interpret).toHaveBeenCalledTimes(2)
+  })
+
+  it('Carteira entre os candidatos aparece uma vez, por último', async () => {
+    prismaMock.account.findMany.mockResolvedValue([
+      ...accounts,
+      { id: 'w', name: 'Carteira', type: 'WALLET' },
+    ])
+    interpret.mockResolvedValueOnce({
+      kind: 'ask_account',
+      draft,
+      candidateAccountIds: ['a1', 'w', 'a1'],
+    })
+    await run({ text: 'almoço 45' })
+    expect(client.sendText).toHaveBeenCalledWith(
+      '5511',
+      'Almoço · R$ 45,00 — de qual conta?\n1) Nubank\n2) Dinheiro (Carteira)',
+    )
+  })
+
   it('entry: salva e responde', async () => {
     interpret.mockResolvedValueOnce({ kind: 'entry', draft, accountId: 'a1' })
     await run({ text: 'almoço 45' })
@@ -179,6 +208,26 @@ describe('handleWhatsappMessage', () => {
   it('outros erros sobem', async () => {
     interpret.mockRejectedValueOnce(new Error('boom'))
     await expect(run({ text: 'x' })).rejects.toThrow('boom')
+  })
+
+  it('erro inesperado: avisa o usuário e relança', async () => {
+    client.downloadMedia.mockRejectedValueOnce(new Error('boom'))
+    await expect(run({ imageId: 'img1' })).rejects.toThrow('boom')
+    expect(client.sendText).toHaveBeenCalledWith(
+      '5511',
+      'Deu um erro aqui e não salvei. Tenta de novo em instantes.',
+    )
+  })
+
+  it('erro ao salvar: avisa e relança, mesmo se o aviso falhar', async () => {
+    interpret.mockResolvedValueOnce({ kind: 'entry', draft, accountId: 'a1' })
+    saveWhatsappEntry.mockRejectedValueOnce(new Error('db'))
+    client.sendText.mockRejectedValueOnce(new Error('meta'))
+    await expect(run({ text: 'almoço 45' })).rejects.toThrow('db')
+    expect(client.sendText).toHaveBeenCalledWith(
+      '5511',
+      'Deu um erro aqui e não salvei. Tenta de novo em instantes.',
+    )
   })
 
   it('imagem: baixa a mídia e passa ao interpret', async () => {

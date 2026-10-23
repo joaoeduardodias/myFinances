@@ -55,8 +55,18 @@ describe('resolveAccountAnswer', () => {
     expect(resolveAccountAnswer('bradesco', options)).toBeNull()
   })
 
-  it('resposta que contém o nome distintivo', () => {
-    expect(resolveAccountAnswer('foi no nubank mesmo', options)).toBe('a1')
+  it('resposta curta com o nome e palavras genéricas', () => {
+    expect(resolveAccountAnswer('na conta nubank', options)).toBe('a1')
+    expect(resolveAccountAnswer(' 2 ', options)).toBe('a2')
+    expect(resolveAccountAnswer('carteira', options)).toBe('w')
+  })
+
+  it('mensagem nova ou pedaço de palavra não é resposta', () => {
+    expect(resolveAccountAnswer('ta', options)).toBeNull()
+    expect(resolveAccountAnswer('café 5 itau', options)).toBeNull()
+    expect(resolveAccountAnswer('almoço 45 pix nubank', options)).toBeNull()
+    expect(resolveAccountAnswer('foi no nubank mesmo', options)).toBeNull()
+    expect(resolveAccountAnswer('itau', options)).toBe('a2')
   })
 })
 

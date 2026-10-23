@@ -42,4 +42,17 @@ describe('createWhatsappClient', () => {
     expect(media.mimeType).toBe('image/jpeg')
     expect([...media.data]).toEqual([1, 2, 3])
   })
+
+  it('todo fetch leva um signal de timeout', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(json({}))
+      .mockResolvedValueOnce(json({ url: 'https://cdn.test/m', mime_type: 'image/jpeg' }))
+      .mockResolvedValueOnce(new Response(new Uint8Array([1])))
+    const client = createWhatsappClient({ accessToken: 't', phoneNumberId: '1', fetch: fetchMock })
+    await client.sendText('1', 'a')
+    await client.downloadMedia('mid')
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    for (const call of fetchMock.mock.calls) expect(call[1].signal).toBeInstanceOf(AbortSignal)
+  })
 })

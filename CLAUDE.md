@@ -35,6 +35,6 @@ Monorepo pnpm + Turborepo: `apps/api` (Fastify + Prisma) e `apps/web` (Vite + Re
 - Fluxo do Início (cards do mês + gráfico de 12 meses): créditos/débitos só das contas e Carteira, compras no cartão à parte, sem transferências (decisão do João).
 - Início ocupa a tela toda: em tela larga, indicadores e gráfico à esquerda e a coluna acima (contas, cartões, "Quanto posso gastar") à direita (decisão do João).
 - Sync serializado por usuário em memória: vale para uma instância só.
-- Lançamento pelo WhatsApp (Cloud API oficial; Gemini grátis aceito pelo João): só o número cadastrado é atendido, com ou sem o 9 do DDD.
+- Lançamento pelo WhatsApp (Cloud API oficial; Gemini grátis aceito pelo João): só o número cadastrado é atendido, com ou sem o 9 depois do DDD.
 - Lançamento do WhatsApp fica fora de pareamento e recorrentes até a Pluggy trazer a transação; ela o substitui mantendo a descrição do João.
-- Conta ambígua no WhatsApp: o bot pergunta (decisão do João). "Desfazer" devolve o texto do banco.
+- Conta ambígua no WhatsApp: o bot pergunta (decisão do João). "Desfazer" apaga o lançamento; se a Pluggy já o trouxe, volta o texto do banco.

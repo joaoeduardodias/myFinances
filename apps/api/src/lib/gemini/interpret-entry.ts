@@ -17,6 +17,11 @@ const GEMINI_TIMEOUT_MS = 15_000
 /** Até quantos dias atrás um lançamento manual pode ser datado. */
 const MAX_DAYS_BACK = 60
 
+/** Acima disso (R$ 1 milhão) é quase certo erro de digitação ou leitura. */
+const MAX_AMOUNT_CENTS = 100_000_000
+
+const MAX_DESCRIPTION_LENGTH = 120
+
 const NOT_FOUND_AMOUNT = 'Não achei o valor. Tenta assim: almoço 45 pix nubank'
 
 export type EntryAccount = {
@@ -191,6 +196,12 @@ export async function interpretEntry(
   }
   const cents = Math.round(amount * 100)
   if (cents <= 0) return { kind: 'not_understood', reply: NOT_FOUND_AMOUNT }
+  if (cents > MAX_AMOUNT_CENTS) {
+    return {
+      kind: 'not_understood',
+      reply: 'Esse valor parece errado. Tenta de novo: almoço 45 pix nubank',
+    }
+  }
 
   const date = raw.date ?? input.today
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !isCalendarDate(date)) {
@@ -206,7 +217,7 @@ export async function interpretEntry(
     }
   }
 
-  const description = raw.description?.trim()
+  const description = raw.description?.trim().slice(0, MAX_DESCRIPTION_LENGTH).trimEnd()
   if (!description) {
     return {
       kind: 'not_understood',

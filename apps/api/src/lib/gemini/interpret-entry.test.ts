@@ -89,6 +89,20 @@ describe('interpretEntry', () => {
     expect(r).toMatchObject({ reply: expect.stringContaining('valor') })
   })
 
+  it('valor acima de R$ 1 milhão vira not_understood', async () => {
+    const r = await run({ ...base, amount: 1_000_000.01 }).result
+    expect(r).toEqual({
+      kind: 'not_understood',
+      reply: 'Esse valor parece errado. Tenta de novo: almoço 45 pix nubank',
+    })
+    expect((await run({ ...base, amount: 1_000_000 }).result).kind).toBe('entry')
+  })
+
+  it('descrição é aparada e cortada em 120 caracteres', async () => {
+    const r = await run({ ...base, description: `  ${'a'.repeat(200)}  ` }).result
+    expect(r).toMatchObject({ draft: { description: 'a'.repeat(120) } })
+  })
+
   it('data futura vira not_understood', async () => {
     const { result } = run({ ...base, date: '2026-10-24' })
     expect((await result).kind).toBe('not_understood')
