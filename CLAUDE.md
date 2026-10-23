@@ -9,6 +9,7 @@ Monorepo pnpm + Turborepo: `apps/api` (Fastify + Prisma) e `apps/web` (Vite + Re
 - Migration: `pnpm --filter @myfinances/api db:migrate --name <nome>` (sempre com `--name`).
 - Integração (Postgres real, usa `.env.e2e`): `pnpm --filter @myfinances/api test:integration`.
 - Webhook da Pluggy: `pnpm --filter @myfinances/api pluggy:webhook <https-url>`.
+- Cadastrar o número do WhatsApp: `pnpm --filter @myfinances/api whatsapp:link <email> <telefone>`.
 - Portas: API 3333, web 5173, Postgres 127.0.0.1:5435 (bancos `myfinances` e `myfinances_test`).
 
 ## Decisões de produto
@@ -34,4 +35,6 @@ Monorepo pnpm + Turborepo: `apps/api` (Fastify + Prisma) e `apps/web` (Vite + Re
 - Fluxo do Início (cards do mês + gráfico de 12 meses): créditos/débitos só das contas e Carteira, compras no cartão à parte, sem transferências (decisão do João).
 - Início ocupa a tela toda: em tela larga, indicadores e gráfico à esquerda e a coluna acima (contas, cartões, "Quanto posso gastar") à direita (decisão do João).
 - Sync serializado por usuário em memória: vale para uma instância só.
-- Melhoria futura: lançamento por WhatsApp ou Telegram.
+- Lançamento pelo WhatsApp (Cloud API oficial; Gemini grátis aceito pelo João): só o número cadastrado é atendido, com ou sem o 9 do DDD.
+- Lançamento do WhatsApp fica fora de pareamento e recorrentes até a Pluggy trazer a transação; ela o substitui mantendo a descrição do João.
+- Conta ambígua no WhatsApp: o bot pergunta (decisão do João). "Desfazer" devolve o texto do banco.
