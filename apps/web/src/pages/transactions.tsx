@@ -268,10 +268,18 @@ export function Transactions() {
       {list.data && list.data.transactions.length > 0 && (
         <>
           <div className="rounded-lg border">
-            <Table>
+            {/* Larguras fixas: reordenar troca as linhas e, no layout
+                automático, as colunas mudariam de tamanho. A descrição fica
+                com o resto, e no celular a tabela rola de lado. */}
+            <Table className="min-w-3xl table-fixed">
               <TableHeader>
                 <TableRow>
-                  <SortableHead column="date" sort={sort} onSort={setSort}>
+                  <SortableHead
+                    column="date"
+                    sort={sort}
+                    onSort={setSort}
+                    className="w-28"
+                  >
                     Data
                   </SortableHead>
                   <SortableHead
@@ -285,22 +293,27 @@ export function Transactions() {
                     column="account"
                     sort={sort}
                     onSort={setSort}
-                    className="hidden md:table-cell"
+                    className="hidden w-40 md:table-cell"
                   >
                     Conta
                   </SortableHead>
-                  <SortableHead column="category" sort={sort} onSort={setSort}>
+                  <SortableHead
+                    column="category"
+                    sort={sort}
+                    onSort={setSort}
+                    className="w-40"
+                  >
                     Categoria
                   </SortableHead>
                   <SortableHead
                     column="amount"
                     sort={sort}
                     onSort={setSort}
-                    className="text-right"
+                    className="w-32 text-right"
                   >
                     Valor
                   </SortableHead>
-                  <TableHead>
+                  <TableHead className="w-44">
                     <span className="sr-only">Ações</span>
                   </TableHead>
                 </TableRow>
@@ -311,9 +324,7 @@ export function Transactions() {
                     <TableCell className="tabular-nums">
                       {formatDate(t.date)}
                     </TableCell>
-                    {/* A descrição quebra linha: sem isso a tabela passa da
-                        tela e o valor fica fora de vista. */}
-                    <TableCell className="min-w-48 whitespace-normal">
+                    <TableCell className="whitespace-normal break-words">
                       <div className="flex flex-wrap items-center gap-2">
                         <span>{t.description}</span>
                         {t.isTransfer && (
@@ -324,13 +335,12 @@ export function Transactions() {
                         {t.account.name}
                       </span>
                     </TableCell>
-                    <TableCell className="hidden md:table-cell">
+                    <TableCell className="hidden truncate md:table-cell">
                       {t.account.name}
                     </TableCell>
                     <TableCell>
                       <NativeSelect
                         aria-label={`Categoria de ${t.description}`}
-                        className="min-w-36"
                         value={t.category ?? ''}
                         onChange={(e) =>
                           changeCategory.mutate({

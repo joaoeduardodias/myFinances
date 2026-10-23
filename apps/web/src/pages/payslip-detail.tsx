@@ -59,20 +59,27 @@ function LinesTable({ title, lines }: { title: string; lines: PayslipLine[] }) {
       {lines.length === 0 ? (
         <p className="text-muted-foreground text-sm">Nenhum lançamento.</p>
       ) : (
-        <Table>
+        // Larguras fixas: reordenar não mexe nas colunas, e as duas tabelas
+        // (proventos e descontos) ficam alinhadas.
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow>
               <SortableHead column="description" sort={sort} onSort={onSort}>
                 Descrição
               </SortableHead>
-              <SortableHead column="reference" sort={sort} onSort={onSort}>
+              <SortableHead
+                column="reference"
+                sort={sort}
+                onSort={onSort}
+                className="w-32"
+              >
                 Referência
               </SortableHead>
               <SortableHead
                 column="amount"
                 sort={sort}
                 onSort={onSort}
-                className="text-right"
+                className="w-36 text-right"
               >
                 Valor
               </SortableHead>
@@ -81,8 +88,10 @@ function LinesTable({ title, lines }: { title: string; lines: PayslipLine[] }) {
           <TableBody>
             {rows.map((l) => (
               <TableRow key={l.id}>
-                <TableCell>{l.description}</TableCell>
-                <TableCell className="text-muted-foreground">
+                <TableCell className="whitespace-normal break-words">
+                  {l.description}
+                </TableCell>
+                <TableCell className="text-muted-foreground truncate">
                   {l.reference ?? '—'}
                 </TableCell>
                 <TableCell className="text-right">
