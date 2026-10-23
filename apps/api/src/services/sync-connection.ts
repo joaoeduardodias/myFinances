@@ -228,6 +228,7 @@ async function syncTransactions(
         userId: true,
         categoryLocked: true,
         descriptionLocked: true,
+        descriptionKey: true,
         accountId: true,
       },
     })
@@ -262,7 +263,8 @@ async function syncTransactions(
 
       const key = descriptionKey(tx.description)
       // Chave vazia (descrição só de dígitos/prefixo) não casa com regra.
-      const category = (key && ruleByKey.get(key)) || mapPluggyCategory(tx.category)
+      const categoryFor = (k: string) => (k && ruleByKey.get(k)) || mapPluggyCategory(tx.category)
+      const category = categoryFor(current?.descriptionLocked ? current.descriptionKey : key)
       const date = pluggyDate(tx.date)
       const amountCents = toCents(tx.amount, tx.type)
       const described = { description: tx.description, descriptionKey: key }
@@ -294,6 +296,9 @@ async function syncTransactions(
               descriptionKey: match.descriptionKey,
               whatsappMessageId: match.whatsappMessageId,
               descriptionLocked: true,
+              originalDescription: tx.description,
+              // A regra do usuário vale pelo nome que ele deu.
+              category: categoryFor(match.descriptionKey),
               ...(match.categoryLocked ? { category: match.category, categoryLocked: true } : {}),
             },
           })
@@ -306,7 +311,9 @@ async function syncTransactions(
         create,
         update: {
           ...fields,
-          ...(current?.descriptionLocked ? {} : described),
+          // Travada, a descrição fica; o texto do banco segue em `originalDescription`
+          // para os detectores de transferência.
+          ...(current?.descriptionLocked ? { originalDescription: tx.description } : described),
           ...(current?.categoryLocked ? {} : { category }),
         },
       })
@@ -409,6 +416,7 @@ async function pairTransfers(userId: string, today: IsoDate, windowDays: number)
       accountId: true,
       date: true,
       description: true,
+      originalDescription: true,
       amountCents: true,
       isTransfer: true,
       transferLocked: true,
@@ -420,7 +428,14 @@ async function pairTransfers(userId: string, today: IsoDate, windowDays: number)
   // Quem já tem par fica de fora mesmo sem `isTransfer`: `transferPairId` é único.
   const txs = rows
     .filter((r) => !r.transferPairId && !r.transferPairOf)
-    .map((r) => ({ ...r, accountType: r.account.type, date: fromDbDate(r.date) }))
+    // Os detectores leem o texto do banco: o nome que o usuário deu ("paguei a
+    // fatura") esconderia o pagamento de fatura e o gasto contaria duas vezes.
+    .map((r) => ({
+      ...r,
+      description: r.originalDescription ?? r.description,
+      accountType: r.account.type,
+      date: fromDbDate(r.date),
+    }))
 
   const paired = new Set<string>()
   for (const [outId, inId] of detectTransferPairs(txs)) {

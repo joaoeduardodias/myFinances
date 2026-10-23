@@ -88,6 +88,7 @@ type PairingRow = {
   transferPairId: string | null
   transferPairOf: { id: string } | null
   account: { type: 'BANK' | 'CREDIT' | 'WALLET' }
+  originalDescription?: string | null
 }
 
 let existingTxs: {
@@ -96,6 +97,7 @@ let existingTxs: {
   categoryLocked: boolean
   accountId: string
   descriptionLocked?: boolean
+  descriptionKey?: string
 }[]
 let pairingRows: PairingRow[]
 let manualRows: ManualRow[]
@@ -413,7 +415,59 @@ describe('syncConnection', () => {
     const call = prismaMock.transaction.upsert.mock.calls[0][0]
     expect(call.update).not.toHaveProperty('description')
     expect(call.update).not.toHaveProperty('descriptionKey')
-    expect(call.update).toMatchObject({ amountCents: -4290, category: 'Alimentação' })
+    expect(call.update).toMatchObject({
+      amountCents: -4290,
+      category: 'Alimentação',
+      originalDescription: 'IFOOD *RESTAURANTE',
+    })
+  })
+
+  it('com descrição travada, a regra do usuário vale pela chave travada', async () => {
+    prismaMock.categoryRule.findMany.mockResolvedValue([
+      { descriptionKey: 'almoco', category: 'Lazer' },
+      { descriptionKey: 'ifood restaurante', category: 'Mercado' },
+    ])
+    manualRows = [manual({ amountCents: -4290, date: new Date('2026-10-10T00:00:00Z') })]
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+    expect(prismaMock.transaction.create.mock.calls[0][0].data).toMatchObject({ category: 'Lazer' })
+
+    // Na sincronização seguinte a linha já existe, travada com a chave do lançamento.
+    manualRows = []
+    existingTxs = [
+      {
+        pluggyTransactionId: 'p-tx-1',
+        userId: USER,
+        categoryLocked: false,
+        accountId: 'db-p-acc-new',
+        descriptionLocked: true,
+        descriptionKey: 'almoco',
+      },
+    ]
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+    expect(prismaMock.transaction.upsert.mock.calls[0][0].update).toMatchObject({ category: 'Lazer' })
+  })
+
+  it('descrição travada não esconde o pagamento de fatura do pareamento', async () => {
+    pairingRows = [
+      row({
+        id: 'bill-pay',
+        amountCents: -80000,
+        description: 'paguei a fatura',
+        originalDescription: 'PAGAMENTO FATURA',
+      }),
+    ]
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    const pairingQuery = prismaMock.transaction.findMany.mock.calls.find(
+      ([args]) => isPairingQuery(args.where),
+    )?.[0]
+    expect(pairingQuery.select.originalDescription).toBe(true)
+    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+      where: { id: 'bill-pay' },
+      data: { isTransfer: true },
+    })
   })
 
   it('transação nova casa com lançamento do WhatsApp e herda a descrição', async () => {
@@ -448,6 +502,7 @@ describe('syncConnection', () => {
       descriptionKey: 'almoco',
       descriptionLocked: true,
       whatsappMessageId: 'wamid.1',
+      originalDescription: 'PIX ENVIADO RESTAURANTE X',
       category: 'Alimentação',
     })
     expect(prismaMock.transaction.create.mock.calls[0][0].data).not.toHaveProperty('categoryLocked')
