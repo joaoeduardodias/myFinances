@@ -43,6 +43,10 @@
 }
 
 :root {
+  /* Sem isto o navegador desenha a lista do <select>, o calendário do
+     <input type=date> e as barras de rolagem no esquema claro: no tema
+     escuro as opções ficavam com texto claro sobre fundo branco. */
+  color-scheme: light;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);
@@ -79,6 +83,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.21 0.006 285.885);

@@ -183,7 +183,10 @@ export function PayslipDetail() {
               {payslip.status !== 'UNRECOGNIZED' &&
                 (data.reconciliation.matched &&
                 data.reconciliation.transaction ? (
-                  <Badge variant="outline" className="text-income">
+                  <Badge
+                    variant="outline"
+                    className="border-income/50 text-income"
+                  >
                     {`Líquido conferido com o depósito de ${formatDate(data.reconciliation.transaction.date)}`}
                   </Badge>
                 ) : (

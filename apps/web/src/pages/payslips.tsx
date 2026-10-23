@@ -57,7 +57,12 @@ function NetChart({ payslips }: { payslips: Payslip[] }) {
                 borderRadius: 8,
               }}
             />
-            <Bar dataKey="net" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+            <Bar
+              dataKey="net"
+              fill="var(--chart-1)"
+              radius={[4, 4, 0, 0]}
+              maxBarSize={48}
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>

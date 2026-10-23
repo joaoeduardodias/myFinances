@@ -50,6 +50,13 @@ const STATUS_LABELS: Record<string, string> = {
   WAITING_USER_INPUT: 'Aguardando ação',
 }
 
+// Status em que a conexão parou e pede ação do usuário.
+const PROBLEM_STATUSES = new Set([
+  'LOGIN_ERROR',
+  'OUTDATED',
+  'WAITING_USER_INPUT',
+])
+
 const saoPauloDateTime = new Intl.DateTimeFormat('pt-BR', {
   timeZone: 'America/Sao_Paulo',
   dateStyle: 'short',
@@ -197,7 +204,14 @@ function ConnectionItem({
       <div className="flex min-w-0 flex-col gap-1.5 text-sm">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{connection.connectorName}</span>
-          <Badge variant="outline">
+          <Badge
+            variant="outline"
+            className={
+              PROBLEM_STATUSES.has(connection.status)
+                ? 'border-destructive/50 text-destructive'
+                : undefined
+            }
+          >
             {STATUS_LABELS[connection.status] ?? connection.status}
           </Badge>
         </div>
@@ -221,7 +235,7 @@ function ConnectionItem({
             : 'Ainda não sincronizada'}
         </p>
         {connection.lastError && (
-          <p className="text-muted-foreground break-words">
+          <p className="text-destructive break-words">
             <span>Último erro:</span> <span>{connection.lastError}</span>
           </p>
         )}

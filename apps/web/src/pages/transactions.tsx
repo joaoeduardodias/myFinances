@@ -239,7 +239,7 @@ export function Transactions() {
                 <TableRow>
                   <TableHead>Data</TableHead>
                   <TableHead>Descrição</TableHead>
-                  <TableHead>Conta</TableHead>
+                  <TableHead className="hidden md:table-cell">Conta</TableHead>
                   <TableHead>Categoria</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
                   <TableHead>
@@ -253,15 +253,22 @@ export function Transactions() {
                     <TableCell className="tabular-nums">
                       {formatDate(t.date)}
                     </TableCell>
-                    <TableCell>
+                    {/* A descrição quebra linha: sem isso a tabela passa da
+                        tela e o valor fica fora de vista. */}
+                    <TableCell className="min-w-48 whitespace-normal">
                       <div className="flex flex-wrap items-center gap-2">
                         <span>{t.description}</span>
                         {t.isTransfer && (
                           <Badge variant="secondary">Transferência</Badge>
                         )}
                       </div>
+                      <span className="text-muted-foreground text-xs md:hidden">
+                        {t.account.name}
+                      </span>
                     </TableCell>
-                    <TableCell>{t.account.name}</TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      {t.account.name}
+                    </TableCell>
                     <TableCell>
                       <NativeSelect
                         aria-label={`Categoria de ${t.description}`}
