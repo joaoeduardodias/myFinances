@@ -63,6 +63,14 @@ export function phoneVariants(digits: string): string[] {
   return variants
 }
 
+const foldText = (t: string) => t.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+// O sync nomeia as contas "Conta Corrente X" / "Conta Poupança X" / "Cartão Crédito X".
+const isSavings = (a: EntryAccount) => a.type === 'BANK' && foldText(a.name).includes('poupanca')
+const optionRank = (a: EntryAccount) => (isSavings(a) ? 2 : a.type === 'CREDIT' ? 1 : 0)
+/** "Conta Corrente Mercado Pago" → "mercado pago": o banco, para achar na mensagem. */
+const institutionOf = (a: EntryAccount) =>
+  foldText(a.name).replace(/^(conta corrente|conta poupanca|cartao credito)\s+/, '')
+
 /** Uma mensagem recebida: grava, pergunta a conta ou responde. Erros inesperados sobem. */
 export async function handleWhatsappMessage(msg: IncomingMessage, deps: Deps): Promise<void> {
   const user = await prisma.user.findFirst({
@@ -150,13 +158,30 @@ async function processMessage(
     if (result.kind === 'entry') return save(result.draft, result.accountId, msg.id)
 
     if (result.kind === 'ask_account') {
-      // A Carteira entra uma vez só, sempre por último.
-      const options: AccountOption[] = []
-      for (const id of new Set(result.candidateAccountIds)) {
-        const account = accounts.find((a) => a.id === id)
-        if (account && account.type !== 'WALLET') options.push({ accountId: id, label: account.name })
+      const folded = foldText(text ?? '')
+      // "débito" já descarta cartão e Carteira: valem as contas do banco (todas,
+      // não só as que o Gemini sugeriu), ou só as do banco citado na mensagem.
+      const debit = /\bdebito\b/.test(folded)
+      let pool = debit
+        ? accounts.filter((a) => a.type === 'BANK')
+        : [...new Set(result.candidateAccountIds)]
+            .map((id) => accounts.find((a) => a.id === id))
+            .filter((a): a is EntryAccount => !!a && a.type !== 'WALLET')
+      if (debit) {
+        const named = pool.filter((a) => folded.includes(institutionOf(a)))
+        if (named.length) pool = named
       }
-      options.push({ accountId: wallet.id, label: 'Dinheiro (Carteira)' })
+      // Compra no débito ou pix sai da corrente: a poupança só entra se a
+      // mensagem falar nela. Se sobrar uma conta, não há o que perguntar.
+      const narrowed = folded.includes('poupanca') ? pool : pool.filter((a) => !isSavings(a))
+      if (narrowed.length === 1 && (debit || pool.length > 1)) {
+        return save(result.draft, narrowed[0].id, msg.id)
+      }
+      // Corrente primeiro, depois cartão, poupança; a Carteira uma vez só, por último.
+      const options: AccountOption[] = (narrowed.length ? narrowed : pool)
+        .sort((a, b) => optionRank(a) - optionRank(b))
+        .map((a) => ({ accountId: a.id, label: a.name }))
+      if (!debit) options.push({ accountId: wallet.id, label: 'Dinheiro (Carteira)' })
       setPending(userId, {
         draft: result.draft,
         options,

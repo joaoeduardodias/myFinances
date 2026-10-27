@@ -7,10 +7,11 @@ import { CATEGORIES, type Category } from '../finance/categories'
 import type { IsoDate } from '../today'
 
 /**
- * Flash gratuito; trocar aqui se a Google aposentar o modelo (o 2.5 saiu para
- * contas novas em 2026-10). O 3.8 passou de 90 s numa resposta: não serve.
+ * Flash Lite gratuito; trocar aqui se a Google aposentar o modelo (o 2.5 saiu
+ * para contas novas em 2026-10). Lite e não Flash pela cota: o Flash grátis dá
+ * 20 chamadas por dia. O 3.8 passou de 90 s numa resposta: não serve.
  */
-export const GEMINI_MODEL = 'gemini-3.5-flash'
+export const GEMINI_MODEL = 'gemini-3.5-flash-lite'
 
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 
@@ -58,7 +59,7 @@ const SYSTEM_INSTRUCTION = `Você extrai UM lançamento financeiro pessoal de um
 Regras:
 - "amount" é o valor em reais, número positivo (ex.: 45.9). Nunca negativo.
 - "direction": "debit" (gasto) por padrão; "credit" só se houver sinal claro de entrada (recebi, salário, pix recebido, reembolso, depósito).
-- Conta: "crédito" ou "cartão" indica conta do tipo CREDIT; "pix", "débito" ou "transferência" indica BANK; "dinheiro" ou "espécie" indica WALLET. Use o nome citado para escolher entre contas do mesmo tipo.
+- Conta: "crédito" ou "cartão" indica conta do tipo CREDIT; "pix", "débito" ou "transferência" indica BANK; "dinheiro" ou "espécie" indica WALLET. Use o nome citado para escolher entre contas do mesmo tipo. Poupança só quando a mensagem disser "poupança": "débito" ou "pix" com o banco citado é a conta corrente desse banco.
 - Nunca chute a conta. Na dúvida, devolva "accountId": null e liste em "candidateAccountIds" as contas plausíveis (use só ids da lista recebida).
 - "date" no formato YYYY-MM-DD. Datas relativas ("ontem", "anteontem", "dia 10") são calculadas a partir de "hoje", informado na mensagem. Sem data, use hoje. Em foto, use a data do comprovante.
 - "description": curta, com a primeira letra maiúscula (ex.: "Almoço").

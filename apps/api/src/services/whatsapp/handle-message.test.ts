@@ -140,6 +140,59 @@ describe('handleWhatsappMessage', () => {
     )
   })
 
+  describe('opções da pergunta', () => {
+    const caixaBradesco = [
+      { id: 'pc', name: 'Conta Poupança Caixa', type: 'BANK' },
+      { id: 'kc', name: 'Cartão Crédito Caixa', type: 'CREDIT' },
+      { id: 'cc', name: 'Conta Corrente Caixa', type: 'BANK' },
+      { id: 'cb', name: 'Conta Corrente Bradesco', type: 'BANK' },
+      { id: 'pb', name: 'Conta Poupança Bradesco', type: 'BANK' },
+    ]
+    beforeEach(() => prismaMock.account.findMany.mockResolvedValue(caixaBradesco))
+    const askWith = (ids: string[]) =>
+      interpret.mockResolvedValueOnce({ kind: 'ask_account', draft, candidateAccountIds: ids })
+
+    it('sem falar em poupança: tira a poupança e põe corrente antes de cartão', async () => {
+      askWith(['pc', 'kc', 'cc', 'cb', 'pb'])
+      await run({ text: 'almoço 45' })
+      expect(client.sendText).toHaveBeenCalledWith(
+        '5511',
+        'Almoço · R$ 45,00 — de qual conta?\n1) Conta Corrente Caixa\n2) Conta Corrente Bradesco\n3) Cartão Crédito Caixa\n4) Dinheiro (Carteira)',
+      )
+    })
+
+    it('sobrou uma conta só depois de tirar a poupança: salva direto', async () => {
+      askWith(['pb', 'cb'])
+      await run({ text: 'almoço 45 débito bradesco' })
+      expect(saveWhatsappEntry).toHaveBeenCalledWith('u1', { draft, accountId: 'cb', messageId: 'm1' })
+    })
+
+    it('falou em débito: lista só as correntes, sem cartão nem Carteira', async () => {
+      askWith(['kc', 'cc'])
+      await run({ text: 'almoço 45 no débito' })
+      expect(client.sendText).toHaveBeenCalledWith(
+        '5511',
+        'Almoço · R$ 45,00 — de qual conta?\n1) Conta Corrente Caixa\n2) Conta Corrente Bradesco',
+      )
+    })
+
+    it('falou em débito e só há uma corrente: salva direto', async () => {
+      prismaMock.account.findMany.mockResolvedValue(caixaBradesco.filter((a) => a.id !== 'cb'))
+      askWith(['kc', 'cc', 'pc'])
+      await run({ text: 'almoço 45 debito' })
+      expect(saveWhatsappEntry).toHaveBeenCalledWith('u1', { draft, accountId: 'cc', messageId: 'm1' })
+    })
+
+    it('falou em poupança: ela fica, depois das correntes', async () => {
+      askWith(['pc', 'cc'])
+      await run({ text: 'almoço 45 pix da poupança' })
+      expect(client.sendText).toHaveBeenCalledWith(
+        '5511',
+        'Almoço · R$ 45,00 — de qual conta?\n1) Conta Corrente Caixa\n2) Conta Poupança Caixa\n3) Dinheiro (Carteira)',
+      )
+    })
+  })
+
   it('entry: salva e responde', async () => {
     interpret.mockResolvedValueOnce({ kind: 'entry', draft, accountId: 'a1' })
     await run({ text: 'almoço 45' })
