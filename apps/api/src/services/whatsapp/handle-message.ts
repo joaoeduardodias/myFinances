@@ -65,21 +65,23 @@ export function phoneVariants(digits: string): string[] {
 
 /** Uma mensagem recebida: grava, pergunta a conta ou responde. Erros inesperados sobem. */
 export async function handleWhatsappMessage(msg: IncomingMessage, deps: Deps): Promise<void> {
-  const { client } = deps
-  const reply = (body: string) => client.sendText(msg.from, body)
-
   const user = await prisma.user.findFirst({
     where: { whatsappPhone: { in: phoneVariants(msg.from) } },
-    select: { id: true },
+    select: { id: true, whatsappPhone: true },
   })
-  if (!user) {
+  if (!user?.whatsappPhone) {
     // Sem resposta (não revela que o número existe), mas deixa rastro para diagnóstico.
     deps.log?.info(`Mensagem do WhatsApp de número não cadastrado (…${msg.from.slice(-4)}).`)
     return
   }
 
+  // Responde ao número cadastrado, não ao `from`: a Meta manda o celular BR sem
+  // o 9, e o número de teste só envia para a lista de permissão, que tem o 9.
+  const to = user.whatsappPhone
+  const reply = (body: string) => deps.client.sendText(to, body)
+
   try {
-    return await processMessage(msg, deps, user.id)
+    return await processMessage(msg, deps, user.id, reply)
   } catch (error) {
     // Sem resposta o usuário acharia que salvou; o aviso é best effort e o
     // erro sobe para o webhook registrar.
@@ -90,9 +92,13 @@ export async function handleWhatsappMessage(msg: IncomingMessage, deps: Deps): P
   }
 }
 
-async function processMessage(msg: IncomingMessage, deps: Deps, userId: string): Promise<void> {
+async function processMessage(
+  msg: IncomingMessage,
+  deps: Deps,
+  userId: string,
+  reply: (body: string) => Promise<void>,
+): Promise<void> {
   const { client } = deps
-  const reply = (body: string) => client.sendText(msg.from, body)
 
   if (msg.unsupported) return reply(UNSUPPORTED_REPLY)
 
@@ -162,7 +168,11 @@ async function processMessage(msg: IncomingMessage, deps: Deps, userId: string):
 
     return reply(result.reply)
   } catch (error) {
-    if (error instanceof GeminiUnavailableError) return reply(GEMINI_DOWN_REPLY)
+    if (error instanceof GeminiUnavailableError) {
+      // Sem isso só o usuário sabe que falhou (ex.: modelo aposentado pelo Google).
+      deps.log?.info(`Gemini indisponível: ${error.message}`)
+      return reply(GEMINI_DOWN_REPLY)
+    }
     throw error
   }
 }

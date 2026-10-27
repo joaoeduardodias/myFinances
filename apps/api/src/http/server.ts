@@ -64,6 +64,7 @@ import { trustProxy } from './trusted-proxy'
 // estourar o limite trancaria todos os usuários junto. Quantos saltos, e por
 // que não `true`, está em `trusted-proxy.ts`.
 const app = fastify({
+  logger: true,
   trustProxy,
   // O código que aparece na tela quando algo falha do nosso lado, e que
   // encontra a linha do log com o motivo real.

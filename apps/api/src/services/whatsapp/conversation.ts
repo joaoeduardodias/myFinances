@@ -79,7 +79,15 @@ export function resolveAccountAnswer(text: string, options: AccountOption[]): st
     const labelWords = words(normalize(option.label))
     return distinctive.every((w) => labelWords.includes(w))
   })
-  return matches.length === 1 ? matches[0].accountId : null
+  if (matches.length === 1) return matches[0].accountId
+
+  // Mesmo banco em várias contas ("caixa" → corrente, poupança e cartão): a
+  // palavra genérica dita desempata ("cartão caixa"); sem ela, vale a corrente.
+  const labelHas = (option: AccountOption, w: string) => words(normalize(option.label)).includes(w)
+  const exact = matches.filter((option) => answerWords.every((w) => labelHas(option, w)))
+  if (exact.length === 1) return exact[0].accountId
+  const checking = matches.filter((option) => labelHas(option, 'corrente'))
+  return checking.length === 1 ? checking[0].accountId : null
 }
 
 export function rememberLastEntry(userId: string, messageId: string) {

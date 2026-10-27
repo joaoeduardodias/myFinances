@@ -15,8 +15,13 @@ export function createWhatsappClient(cfg: {
   const auth = { Authorization: `Bearer ${cfg.accessToken}` }
 
   async function ok(response: Response, what: string) {
-    if (!response.ok) throw new Error(`${what} falhou (HTTP ${response.status}).`)
-    return response
+    if (response.ok) return response
+    // A Graph API explica o erro no corpo (ex.: 131030, destinatário fora da
+    // lista do número de teste); sem isso o log só diria "HTTP 400".
+    const reason = await (response.json() as Promise<{ error?: { message?: string } }>)
+      .then((body) => body.error?.message)
+      .catch(() => undefined)
+    throw new Error(`${what} falhou (HTTP ${response.status})${reason ? `: ${reason}` : '.'}`)
   }
 
   return {

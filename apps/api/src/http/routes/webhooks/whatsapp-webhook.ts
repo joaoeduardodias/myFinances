@@ -35,8 +35,9 @@ type Raw = Record<string, unknown>
 const isObj = (v: unknown): v is Raw => typeof v === 'object' && v !== null
 const asArray = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
 
-export function extractMessages(payload: unknown, phoneNumberId: string): IncomingMessage[] {
-  const out: IncomingMessage[] = []
+/** Os `value` do payload que são do nosso número. */
+function valuesFor(payload: unknown, phoneNumberId: string): Raw[] {
+  const out: Raw[] = []
   if (!isObj(payload)) return out
   for (const entry of asArray(payload.entry)) {
     if (!isObj(entry)) continue
@@ -44,22 +45,62 @@ export function extractMessages(payload: unknown, phoneNumberId: string): Incomi
       const value = isObj(change) ? change.value : undefined
       if (!isObj(value)) continue
       const meta = value.metadata
-      if (!isObj(meta) || meta.phone_number_id !== phoneNumberId) continue
-      for (const m of asArray(value.messages)) {
-        if (!isObj(m) || typeof m.id !== 'string' || typeof m.from !== 'string') continue
-        const base = { id: m.id, from: m.from }
-        if (m.type === 'text' && isObj(m.text) && typeof m.text.body === 'string') {
-          out.push({ ...base, text: m.text.body })
-        } else if (m.type === 'image' && isObj(m.image) && typeof m.image.id === 'string') {
-          const caption = typeof m.image.caption === 'string' ? m.image.caption : undefined
-          out.push({ ...base, imageId: m.image.id, ...(caption ? { text: caption } : {}) })
-        } else {
-          out.push({ ...base, unsupported: true })
-        }
+      if (isObj(meta) && meta.phone_number_id === phoneNumberId) out.push(value)
+    }
+  }
+  return out
+}
+
+export function extractMessages(payload: unknown, phoneNumberId: string): IncomingMessage[] {
+  const out: IncomingMessage[] = []
+  for (const value of valuesFor(payload, phoneNumberId)) {
+    for (const m of asArray(value.messages)) {
+      if (!isObj(m) || typeof m.id !== 'string' || typeof m.from !== 'string') continue
+      const base = { id: m.id, from: m.from }
+      if (m.type === 'text' && isObj(m.text) && typeof m.text.body === 'string') {
+        out.push({ ...base, text: m.text.body })
+      } else if (m.type === 'image' && isObj(m.image) && typeof m.image.id === 'string') {
+        const caption = typeof m.image.caption === 'string' ? m.image.caption : undefined
+        out.push({ ...base, imageId: m.image.id, ...(caption ? { text: caption } : {}) })
+      } else {
+        out.push({ ...base, unsupported: true })
       }
     }
   }
   return out
+}
+
+/**
+ * A Meta aceita o envio (200) e só avisa depois, num status `failed`, que não
+ * entregou. Sem isso a resposta do bot some sem rastro. Fica sem o
+ * `recipient_id` para não gravar o telefone no log.
+ */
+export function extractDeliveryFailures(
+  payload: unknown,
+  phoneNumberId: string,
+): { id: unknown; errors: unknown }[] {
+  return valuesFor(payload, phoneNumberId).flatMap((value) =>
+    asArray(value.statuses)
+      .filter((st): st is Raw => isObj(st) && st.status === 'failed')
+      .map((st) => ({ id: st.id, errors: st.errors })),
+  )
+}
+
+/**
+ * Resumo de um webhook que não trouxe mensagem para o nosso número: campo,
+ * número e chaves do `value`, sem telefone nem texto. Sem isso o evento some
+ * sem rastro (ex.: mensagem mandada a outro número da conta).
+ */
+export function describeEvents(payload: unknown) {
+  if (!isObj(payload)) return []
+  return asArray(payload.entry).flatMap((entry) =>
+    asArray(isObj(entry) ? entry.changes : undefined).map((change) => {
+      const c = isObj(change) ? change : {}
+      const value = isObj(c.value) ? c.value : {}
+      const meta = isObj(value.metadata) ? value.metadata : {}
+      return { field: c.field, phoneNumberId: meta.phone_number_id, keys: Object.keys(value) }
+    }),
+  )
 }
 
 async function processMessages(
@@ -112,6 +153,13 @@ function whatsappWebhook(cfg: WhatsappConfig) {
       }
       const messages = extractMessages(payload, cfg.phoneNumberId)
       const log = request.log
+      const failures = extractDeliveryFailures(payload, cfg.phoneNumberId)
+      for (const failure of failures) {
+        log.warn(failure, 'Meta não entregou a mensagem do WhatsApp')
+      }
+      if (messages.length === 0 && failures.length === 0) {
+        log.info({ events: describeEvents(payload) }, 'Webhook do WhatsApp sem mensagem para o número')
+      }
       // A Meta reenvia se a resposta demorar: responde já e processa depois.
       setImmediate(() => {
         processMessages(messages, client, log).catch(() => undefined)

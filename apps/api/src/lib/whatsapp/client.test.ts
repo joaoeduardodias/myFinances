@@ -29,6 +29,15 @@ describe('createWhatsappClient', () => {
     await expect(client.sendText('1', 'a')).rejects.toThrow()
   })
 
+  it('o erro traz o código e o motivo que a Meta devolveu', async () => {
+    const body = { error: { code: 131030, message: '(#131030) Recipient phone number not in allowed list' } }
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 400 }))
+    const client = createWhatsappClient({ accessToken: 't', phoneNumberId: '1', fetch: fetchMock })
+    await expect(client.sendText('1', 'a')).rejects.toThrow(
+      'Envio ao WhatsApp falhou (HTTP 400): (#131030) Recipient phone number not in allowed list',
+    )
+  })
+
   it('downloadMedia busca a URL da mídia e depois os bytes, ambos com Bearer', async () => {
     const fetchMock = vi
       .fn()

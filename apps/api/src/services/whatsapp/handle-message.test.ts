@@ -36,7 +36,7 @@ beforeEach(() => {
   resetPrismaMocks(prismaMock)
   vi.clearAllMocks()
   resetConversation()
-  prismaMock.user.findFirst.mockResolvedValue({ id: 'u1' })
+  prismaMock.user.findFirst.mockResolvedValue({ id: 'u1', whatsappPhone: '5511' })
   prismaMock.account.findMany.mockResolvedValue(accounts)
   ensureWalletAccount.mockResolvedValue({ id: 'w', name: 'Carteira', type: 'WALLET' })
   saveWhatsappEntry.mockResolvedValue({
@@ -66,7 +66,10 @@ describe('phoneVariants', () => {
 })
 
 describe('handleWhatsappMessage', () => {
-  it('acha o usuário cadastrado com 13 dígitos quando from veio com 12', async () => {
+  it('acha o usuário cadastrado com 13 dígitos quando from veio com 12 e responde ao cadastrado', async () => {
+    // O número de teste da Meta só envia para a lista de permissão, que guarda
+    // o número com o 9; responder ao `from` sem o 9 dá erro 131030.
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'u1', whatsappPhone: '5511999999999' })
     interpret.mockResolvedValueOnce({ kind: 'entry', draft, accountId: 'a1' })
     await run({ from: '551199999999', text: 'almoço 45' })
     expect(prismaMock.user.findFirst).toHaveBeenCalledWith(
@@ -74,7 +77,7 @@ describe('handleWhatsappMessage', () => {
         where: { whatsappPhone: { in: ['551199999999', '5511999999999'] } },
       }),
     )
-    expect(client.sendText).toHaveBeenCalledWith('551199999999', expect.any(String))
+    expect(client.sendText).toHaveBeenCalledWith('5511999999999', expect.any(String))
   })
 
   it('número desconhecido: não responde e loga só os 4 últimos dígitos', async () => {
@@ -196,13 +199,18 @@ describe('handleWhatsappMessage', () => {
     expect(client.sendText).not.toHaveBeenCalled()
   })
 
-  it('Gemini fora', async () => {
-    interpret.mockRejectedValueOnce(new GeminiUnavailableError('x'))
-    await run({ text: 'almoço 45' })
+  it('Gemini fora: avisa o usuário e loga o motivo', async () => {
+    interpret.mockRejectedValueOnce(new GeminiUnavailableError('Gemini respondeu 404'))
+    const log = { info: vi.fn() }
+    await handleWhatsappMessage(
+      { id: 'm1', from: '5511', text: 'almoço 45' },
+      { client, interpret, today, now, log },
+    )
     expect(client.sendText).toHaveBeenCalledWith(
       '5511',
       'Não consegui entender agora, tenta de novo em instantes.',
     )
+    expect(log.info.mock.calls[0][0]).toContain('Gemini respondeu 404')
   })
 
   it('outros erros sobem', async () => {

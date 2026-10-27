@@ -172,9 +172,44 @@ describe('interpretEntry', () => {
     await expect(
       interpretEntry(
         { text: 'x', accounts: ACCOUNTS, today: TODAY },
-        { fetch: fetchMock as unknown as typeof fetch, apiKey: 'k' },
+        { fetch: fetchMock as unknown as typeof fetch, apiKey: 'k', retryDelayMs: 0 },
       ),
     ).rejects.toBeInstanceOf(GeminiUnavailableError)
+  })
+
+  it('503 tenta de novo uma vez e segue se a segunda der certo', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 503 }))
+      .mockResolvedValueOnce(geminiResponse(base))
+    const result = await interpretEntry(
+      { text: 'x', accounts: ACCOUNTS, today: TODAY },
+      { fetch: fetchMock as unknown as typeof fetch, apiKey: 'k', retryDelayMs: 0 },
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(result.kind).toBe('entry')
+  })
+
+  it('503 duas vezes desiste sem uma terceira chamada', async () => {
+    const fetchMock = vi.fn(async () => new Response('{}', { status: 503 }))
+    await expect(
+      interpretEntry(
+        { text: 'x', accounts: ACCOUNTS, today: TODAY },
+        { fetch: fetchMock as unknown as typeof fetch, apiKey: 'k', retryDelayMs: 0 },
+      ),
+    ).rejects.toBeInstanceOf(GeminiUnavailableError)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('o erro traz o motivo que o Google devolveu', async () => {
+    const body = { error: { code: 404, message: 'This model is no longer available to new users.' } }
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(body), { status: 404 }))
+    await expect(
+      interpretEntry(
+        { text: 'x', accounts: ACCOUNTS, today: TODAY },
+        { fetch: fetchMock as unknown as typeof fetch, apiKey: 'k' },
+      ),
+    ).rejects.toThrow('Gemini respondeu 404: This model is no longer available to new users.')
   })
 
   it('rede e JSON inválido lançam GeminiUnavailableError', async () => {

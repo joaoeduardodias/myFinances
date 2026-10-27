@@ -37,4 +37,4 @@ Monorepo pnpm + Turborepo: `apps/api` (Fastify + Prisma) e `apps/web` (Vite + Re
 - Sync serializado por usuário em memória: vale para uma instância só.
 - Lançamento pelo WhatsApp (Cloud API oficial; Gemini grátis aceito pelo João): só o número cadastrado é atendido, com ou sem o 9 depois do DDD.
 - Lançamento do WhatsApp fica fora de pareamento e recorrentes até a Pluggy trazer a transação; ela o substitui mantendo a descrição do João.
-- Conta ambígua no WhatsApp: o bot pergunta (decisão do João). "Desfazer" apaga o lançamento; se a Pluggy já o trouxe, volta o texto do banco.
+- Conta ambígua no WhatsApp: o bot pergunta (decisão do João); responder só o banco ("caixa") vale a conta corrente. "Desfazer" apaga o lançamento; se a Pluggy já o trouxe, volta o texto do banco.

@@ -55,6 +55,17 @@ describe('resolveAccountAnswer', () => {
     expect(resolveAccountAnswer('bradesco', options)).toBeNull()
   })
 
+  it('mesmo banco com corrente e poupança: o nome sozinho fica com a corrente', () => {
+    const caixa: AccountOption[] = [
+      { accountId: 'cp', label: 'Conta Poupança Caixa' },
+      { accountId: 'cc', label: 'Conta Corrente Caixa' },
+      { accountId: 'card', label: 'Cartão Crédito Caixa' },
+    ]
+    expect(resolveAccountAnswer('caixa', caixa)).toBe('cc')
+    expect(resolveAccountAnswer('poupança caixa', caixa)).toBe('cp')
+    expect(resolveAccountAnswer('cartão caixa', caixa)).toBe('card')
+  })
+
   it('resposta curta com o nome e palavras genéricas', () => {
     expect(resolveAccountAnswer('na conta nubank', options)).toBe('a1')
     expect(resolveAccountAnswer(' 2 ', options)).toBe('a2')

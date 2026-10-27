@@ -9,7 +9,13 @@ vi.mock('@/services/whatsapp/handle-message', () => ({
   handleWhatsappMessage: handleMock,
 }))
 
-const { extractMessages, registerWhatsappWebhook, verifyMetaSignature } =
+const {
+  describeEvents,
+  extractDeliveryFailures,
+  extractMessages,
+  registerWhatsappWebhook,
+  verifyMetaSignature,
+} =
   await import('./whatsapp-webhook')
 
 const cfg = {
@@ -150,6 +156,52 @@ describe('extractMessages', () => {
   it('lixo vira lista vazia', () => {
     expect(extractMessages(null, '99')).toEqual([])
     expect(extractMessages({ entry: 'x' }, '99')).toEqual([])
+  })
+})
+
+describe('extractDeliveryFailures', () => {
+  it('pega só os status failed do número, com o código e o motivo da Meta', () => {
+    const failures = extractDeliveryFailures(
+      payload({
+        metadata: { phone_number_id: '99' },
+        statuses: [
+          { id: 'w1', status: 'delivered', recipient_id: '5511999999999' },
+          {
+            id: 'w2',
+            status: 'failed',
+            recipient_id: '5511999999999',
+            errors: [{ code: 131026, title: 'Message undeliverable' }],
+          },
+        ],
+      }),
+      '99',
+    )
+    expect(failures).toEqual([{ id: 'w2', errors: [{ code: 131026, title: 'Message undeliverable' }] }])
+  })
+
+  it('outro phone_number_id e lixo viram lista vazia', () => {
+    const value = { metadata: { phone_number_id: '1' }, statuses: [{ id: 'w', status: 'failed' }] }
+    expect(extractDeliveryFailures(payload(value), '99')).toEqual([])
+    expect(extractDeliveryFailures(null, '99')).toEqual([])
+  })
+})
+
+describe('describeEvents', () => {
+  it('resume campo, número e o que veio, sem telefone nem texto', () => {
+    const body = {
+      entry: [
+        {
+          changes: [
+            { field: 'messages', value: { metadata: { phone_number_id: '7' }, messages: [{ from: '5511999999999' }] } },
+            { field: 'account_update', value: {} },
+          ],
+        },
+      ],
+    }
+    expect(describeEvents(body)).toEqual([
+      { field: 'messages', phoneNumberId: '7', keys: ['metadata', 'messages'] },
+      { field: 'account_update', phoneNumberId: undefined, keys: [] },
+    ])
   })
 })
 
