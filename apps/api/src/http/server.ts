@@ -58,16 +58,10 @@ import { registerWhatsappWebhook } from './routes/webhooks/whatsapp-webhook'
 import { swaggerSchemaTransform, swaggerTransformObject } from './swagger'
 import { trustProxy } from './trusted-proxy'
 
-// `trustProxy` porque a API roda atrás de um proxy: sem isso todo `request.ip`
-// é o IP do proxy, e o limitador por IP deixaria de proteger contra um
-// atacante para virar um interruptor de negação de serviço — o primeiro a
-// estourar o limite trancaria todos os usuários junto. Quantos saltos, e por
-// que não `true`, está em `trusted-proxy.ts`.
+
 const app = fastify({
   logger: true,
   trustProxy,
-  // O código que aparece na tela quando algo falha do nosso lado, e que
-  // encontra a linha do log com o motivo real.
   genReqId: newRequestReference,
 }).withTypeProvider<ZodTypeProvider>()
 app.setSerializerCompiler(serializerCompiler)
@@ -180,11 +174,11 @@ registerWhatsappWebhook(
     env.WHATSAPP_PHONE_NUMBER_ID &&
     env.GEMINI_API_KEY
     ? {
-        accessToken: env.WHATSAPP_ACCESS_TOKEN,
-        appSecret: env.WHATSAPP_APP_SECRET,
-        verifyToken: env.WHATSAPP_VERIFY_TOKEN,
-        phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
-      }
+      accessToken: env.WHATSAPP_ACCESS_TOKEN,
+      appSecret: env.WHATSAPP_APP_SECRET,
+      verifyToken: env.WHATSAPP_VERIFY_TOKEN,
+      phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
+    }
     : undefined,
 )
 
