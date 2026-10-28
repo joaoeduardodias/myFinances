@@ -26,6 +26,7 @@
   --color-income: var(--income);
   --color-essential: var(--essential);
   --color-avoidable: var(--avoidable);
+  --color-emergency: var(--emergency);
   --color-debt: var(--debt);
   --color-unclassified: var(--unclassified);
   --color-border: var(--border);
@@ -70,6 +71,7 @@
   --income: oklch(0.527 0.154 150.069);
   --essential: oklch(0.52 0.15 255);
   --avoidable: oklch(0.68 0.17 55);
+  --emergency: oklch(0.55 0.2 305);
   --debt: oklch(0.5 0.2 20);
   --unclassified: oklch(0.68 0.01 286);
   --border: oklch(0.92 0.004 286.32);
@@ -110,6 +112,7 @@
   --income: oklch(0.765 0.177 163.223);
   --essential: oklch(0.68 0.15 250);
   --avoidable: oklch(0.78 0.16 65);
+  --emergency: oklch(0.72 0.17 305);
   --debt: oklch(0.65 0.21 20);
   --unclassified: oklch(0.6 0.01 286);
   --border: oklch(1 0 0 / 10%);

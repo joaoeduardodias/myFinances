@@ -41,6 +41,7 @@ const months = Array.from({ length: 12 }, (_, i) => ({
   incomeCents: 100000,
   essentialCents: 40000,
   avoidableCents: 10000,
+  emergencyCents: 0,
   debtCents: 0,
   unclassifiedCents: 0,
   investedCents: 0,
@@ -55,6 +56,7 @@ const base: Analysis = {
     incomeCents: 1300000,
     essentialCents: 600000,
     avoidableCents: 200000,
+    emergencyCents: 0,
     debtCents: 100000,
     unclassifiedCents: 100000,
     investedCents: 0,
@@ -316,5 +318,51 @@ describe('AnalysisPage', () => {
   it('valor negativo de categoria aparece com sinal', async () => {
     renderPage()
     expect(await screen.findByText('-R$ 30,00')).toBeInTheDocument()
+  })
+
+  it('mostra emergência com o percentual do que saiu', async () => {
+    renderPage({
+      totals: {
+        ...base.totals,
+        essentialCents: 6000,
+        avoidableCents: 2000,
+        emergencyCents: 2000,
+        debtCents: 0,
+        unclassifiedCents: 0,
+      },
+    })
+    const indicators = await screen.findByRole('region', {
+      name: 'Indicadores',
+    })
+    const saiu = within(indicators)
+      .getByText('Saiu')
+      .closest('[data-slot="card"]')
+    expect(saiu).toHaveTextContent('R$ 100,00')
+    const emergencia = within(indicators)
+      .getByText('Emergência')
+      .closest('[data-slot="card"]')
+    expect(emergencia).toHaveTextContent('R$ 20,00')
+    expect(emergencia).toHaveTextContent('20%')
+  })
+
+  it('nomeia o grupo emergência em Maiores gastos', async () => {
+    renderPage({
+      topExpenses: [
+        {
+          id: 'e1',
+          date: '2026-10-10',
+          description: 'Dentista',
+          amountCents: -30000,
+          category: 'Lazer',
+          necessity: 'EMERGENCY',
+          accountName: 'Nubank',
+          group: 'emergency',
+        },
+      ],
+    })
+    const table = await screen.findByRole('table', { name: 'Maiores gastos' })
+    expect(within(table).getByText('Emergência')).toBeInTheDocument()
+    const categorias = screen.getByRole('table', { name: /para onde foi/i })
+    expect(within(categorias).queryByText('Emergência')).toBeNull()
   })
 })

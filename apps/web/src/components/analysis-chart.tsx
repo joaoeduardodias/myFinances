@@ -19,10 +19,12 @@ import {
 import type { Analysis } from '@/http/analysis'
 import { formatBRL } from '@/lib/format'
 import { formatCompetence } from '@/lib/payslip'
+import { spentCents } from '@/lib/spent'
 
 export const GROUP_META = {
   essential: { label: 'Essencial', color: 'var(--essential)' },
   avoidable: { label: 'Evitável', color: 'var(--avoidable)' },
+  emergency: { label: 'Emergência', color: 'var(--emergency)' },
   debt: { label: 'Dívida', color: 'var(--debt)' },
   unclassified: { label: 'Sem classificação', color: 'var(--unclassified)' },
 } as const
@@ -30,6 +32,7 @@ export const GROUP_META = {
 const SPEND_BARS = [
   { key: 'essentialCents', ...GROUP_META.essential },
   { key: 'avoidableCents', ...GROUP_META.avoidable },
+  { key: 'emergencyCents', ...GROUP_META.emergency },
   { key: 'debtCents', ...GROUP_META.debt },
   { key: 'unclassifiedCents', ...GROUP_META.unclassified },
 ] as const
@@ -64,10 +67,7 @@ export function AnalysisChart({
             .map(
               (d) =>
                 `${d.label} entrou ${formatBRL(d.incomeCents)}, saiu ${formatBRL(
-                  d.essentialCents +
-                    d.avoidableCents +
-                    d.debtCents +
-                    d.unclassifiedCents,
+                  spentCents(d),
                 )}`,
             )
             .join('; ')}`}

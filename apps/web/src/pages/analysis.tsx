@@ -30,6 +30,7 @@ import {
 } from '@/http/analysis'
 import { formatBRL, formatDate } from '@/lib/format'
 import { type Sort, sortRows, toggleSort } from '@/lib/sort'
+import { spentCents } from '@/lib/spent'
 
 const MONTH_PARAM = /^\d{4}-(0[1-9]|1[0-2])$/
 
@@ -89,16 +90,12 @@ function Kpi({
 }
 
 function Indicators({ totals }: { totals: Analysis['totals'] }) {
-  const spent =
-    totals.essentialCents +
-    totals.avoidableCents +
-    totals.debtCents +
-    totals.unclassifiedCents
+  const spent = spentCents(totals)
   const result = totals.incomeCents - spent
   return (
     <section
       aria-label="Indicadores"
-      className="grid gap-4 sm:grid-cols-3 2xl:grid-cols-7"
+      className="grid gap-4 sm:grid-cols-3 2xl:grid-cols-8"
     >
       <Kpi label="Entrou" valueCents={totals.incomeCents} tone="text-income" />
       <Kpi label="Saiu" valueCents={spent} />
@@ -116,6 +113,11 @@ function Indicators({ totals }: { totals: Analysis['totals'] }) {
         label="Evitável"
         valueCents={totals.avoidableCents}
         hint={`${share(totals.avoidableCents, spent)} do que saiu`}
+      />
+      <Kpi
+        label="Emergência"
+        valueCents={totals.emergencyCents}
+        hint={`${share(totals.emergencyCents, spent)} do que saiu`}
       />
       <Kpi
         label="Dívida"
@@ -247,7 +249,7 @@ function CategoriesTable({
   )
 }
 
-type ExpenseColumn = 'date' | 'description' | 'account' | 'amount'
+type ExpenseColumn = 'date' | 'description' | 'account' | 'group' | 'amount'
 
 function ExpensesTable({
   title,
@@ -266,6 +268,8 @@ function ExpensesTable({
             return e.description
           case 'account':
             return e.accountName
+          case 'group':
+            return GROUP_META[e.group].label
           default:
             return Math.abs(e.amountCents)
         }
@@ -292,6 +296,9 @@ function ExpensesTable({
               <SortableHead column="account" sort={sort} onSort={onSort}>
                 Conta
               </SortableHead>
+              <SortableHead column="group" sort={sort} onSort={onSort}>
+                Grupo
+              </SortableHead>
               <SortableHead column="amount" sort={sort} onSort={onSort}>
                 Valor
               </SortableHead>
@@ -305,6 +312,7 @@ function ExpensesTable({
                 </TableCell>
                 <TableCell>{e.description}</TableCell>
                 <TableCell>{e.accountName}</TableCell>
+                <TableCell>{GROUP_META[e.group].label}</TableCell>
                 <TableCell className="tabular-nums">
                   {formatBRL(Math.abs(e.amountCents))}
                 </TableCell>
@@ -341,12 +349,7 @@ export function AnalysisPage() {
     queryFn: () => getAnalysis(month),
   })
 
-  const spent = data
-    ? data.totals.essentialCents +
-      data.totals.avoidableCents +
-      data.totals.debtCents +
-      data.totals.unclassifiedCents
-    : 0
+  const spent = data ? spentCents(data.totals) : 0
   const period = data
     ? month
       ? shortMonth(month)

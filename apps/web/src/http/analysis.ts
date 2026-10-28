@@ -1,12 +1,20 @@
 import { api } from './api'
 
 export type Necessity = 'ESSENTIAL' | 'AVOIDABLE'
-export type SpendGroup = 'essential' | 'avoidable' | 'debt' | 'unclassified'
+/** Marca de uma transação; emergência não existe como padrão de categoria. */
+export type TransactionNecessity = Necessity | 'EMERGENCY'
+export type SpendGroup =
+  | 'essential'
+  | 'avoidable'
+  | 'emergency'
+  | 'debt'
+  | 'unclassified'
 
 export interface AnalysisTotals {
   incomeCents: number
   essentialCents: number
   avoidableCents: number
+  emergencyCents: number
   debtCents: number
   unclassifiedCents: number
   investedCents: number
@@ -18,7 +26,7 @@ export interface AnalysisExpense {
   description: string
   amountCents: number
   category: string | null
-  necessity: Necessity | null
+  necessity: TransactionNecessity | null
   accountName: string
   group: SpendGroup
 }
@@ -74,9 +82,16 @@ export async function listAnalysisTransactions(p: {
 
 export async function setTransactionNecessity(
   id: string,
-  necessity: Necessity | null,
+  necessity: TransactionNecessity | null,
 ) {
   await api.patch(`transactions/${id}/necessity`, { json: { necessity } })
+}
+
+export async function setTransactionDescription(
+  id: string,
+  description: string,
+) {
+  await api.patch(`transactions/${id}/description`, { json: { description } })
 }
 
 export async function listCategoryNecessities() {

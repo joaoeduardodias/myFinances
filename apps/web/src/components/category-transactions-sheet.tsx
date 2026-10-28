@@ -22,8 +22,8 @@ import {
 } from '@/components/ui/table'
 import {
   listAnalysisTransactions,
-  type Necessity,
   setTransactionNecessity,
+  type TransactionNecessity,
 } from '@/http/analysis'
 import { listCategories, setTransactionCategory } from '@/http/transactions'
 import { formatBRL, formatDate } from '@/lib/format'
@@ -69,7 +69,7 @@ export function CategoryTransactionsSheet({ category, month, onClose }: Props) {
       toast.error('Não foi possível alterar a categoria. Tente novamente.'),
   })
   const changeNecessity = useMutation({
-    mutationFn: (v: { id: string; necessity: Necessity | null }) =>
+    mutationFn: (v: { id: string; necessity: TransactionNecessity | null }) =>
       setTransactionNecessity(v.id, v.necessity),
     onSuccess: invalidate,
     onError: () =>
@@ -186,7 +186,7 @@ export function CategoryTransactionsSheet({ category, month, onClose }: Props) {
                               changeNecessity.mutate({
                                 id: t.id,
                                 necessity: (e.target.value ||
-                                  null) as Necessity | null,
+                                  null) as TransactionNecessity | null,
                               })
                             }
                           >
