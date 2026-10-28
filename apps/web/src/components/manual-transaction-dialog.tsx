@@ -109,7 +109,7 @@ export function ManualTransactionDialog() {
       createManualTransaction(input),
     onSuccess: async () => {
       await Promise.all(
-        ['transactions', 'dashboard', 'accounts'].map((key) =>
+        ['transactions', 'dashboard', 'accounts', 'notifications'].map((key) =>
           queryClient.invalidateQueries({ queryKey: [key] }),
         ),
       )

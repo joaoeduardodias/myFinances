@@ -231,7 +231,7 @@ function ConnectionItem({
     mutationFn: (id: string) => syncConnection(id),
     onSuccess: () =>
       Promise.all(
-        CONNECTION_KEYS.map((key) =>
+        [...CONNECTION_KEYS, 'notifications'].map((key) =>
           queryClient.invalidateQueries({ queryKey: [key] }),
         ),
       ),

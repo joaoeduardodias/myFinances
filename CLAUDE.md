@@ -41,3 +41,4 @@ Monorepo pnpm + Turborepo: `apps/api` (Fastify + Prisma) e `apps/web` (Vite + Re
 - Análise: crédito com categoria de gasto abate a categoria (estorno, devolução); marca na mão vale para o débito e sobrevive à troca de categoria; Dívidas e Investimentos fora de essencial/evitável (decisão do João).
 - Renomear pode valer para as parecidas (mesmo texto do banco) e as próximas só se o João marcar na janela; apagar a descrição desfaz a regra. "Salvar como recorrente" confirma até recorrente descartado (decisão do João).
 - Emergência é só marca manual da transação (decisão do João), grupo próprio na Análise e fora de 'Dava pra evitar'; descrição editada trava contra o sync e a regra de categoria segue o texto do banco.
+- Limites e alarmes são regra, sem IA: proposta pela mediana de 6 meses, alarme de categoria uma vez por limiar no mês, de "Quanto posso gastar" só de novo depois de voltar ao positivo; Outros fica sem limite.

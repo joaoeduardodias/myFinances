@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 
 import { AppSidebar } from '@/components/app-sidebar'
+import { NotificationsBell } from '@/components/notifications-bell'
 import { ThemeToggle } from '@/components/theme-toggle'
 import {
   SidebarInset,
@@ -17,7 +18,8 @@ export function AppLayout() {
       <SidebarInset className="min-h-0 overflow-hidden">
         <header className="bg-background sticky top-0 z-40 flex h-14 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger />
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-1">
+            <NotificationsBell />
             <ThemeToggle />
           </div>
         </header>
