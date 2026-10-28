@@ -13,6 +13,9 @@ import { deleteConnection } from './connections/delete-connection'
 import { getConnections } from './connections/get-connections'
 import { syncConnectionRoute } from './connections/sync-connection'
 import { getDashboard } from './dashboard/get-dashboard'
+import { getCategoryLimits } from './limits/get-category-limits'
+import { getNotifications } from './notifications/get-notifications'
+import { readNotifications } from './notifications/read-notifications'
 import { deletePayslip } from './payslips/delete-payslip'
 import { getPayslip } from './payslips/get-payslip'
 import { getPayslipFile } from './payslips/get-payslip-file'
@@ -169,6 +172,13 @@ describe('isolamento entre usuários', () => {
     })
     walletBId = walletB.id
 
+    await prisma.categoryLimit.create({
+      data: { userId: userAId, category: 'Mercado', status: 'ACTIVE', limitCents: 70_000, reviewedMonth: '2026-01' },
+    })
+    await prisma.notification.create({
+      data: { userId: userAId, kind: 'CATEGORY_EXCEEDED', title: 'Limite de A', body: 'Aviso de A' },
+    })
+
     app = await buildTestApp(
       getConnections,
       deleteConnection,
@@ -191,6 +201,9 @@ describe('isolamento entre usuários', () => {
       updatePayslipLines,
       deletePayslip,
       getDashboard,
+      getCategoryLimits,
+      getNotifications,
+      readNotifications,
     )
     tokenB = await signToken(app, { sub: userBId })
   })
@@ -266,6 +279,37 @@ describe('isolamento entre usuários', () => {
       const res = await app.inject({ method: 'GET', url: '/dashboard', headers: asB() })
       expect(res.statusCode).toBe(200)
       expect(res.json().balanceCents).toBe(0)
+    })
+  })
+
+  describe('limites e avisos', () => {
+    it('B não vê o limite de A', async () => {
+      const res = await app.inject({ method: 'GET', url: '/category-limits', headers: asB() })
+      expect(res.statusCode).toBe(200)
+      const mercado = res.json().limits.find((l: { category: string }) => l.category === 'Mercado')
+      expect(mercado).toMatchObject({ status: 'NEW', limitCents: null })
+    })
+
+    it('controle positivo: A vê o limite dele', async () => {
+      const headers = authHeaders(await signToken(app, { sub: userAId }))
+      const res = await app.inject({ method: 'GET', url: '/category-limits', headers })
+      const mercado = res.json().limits.find((l: { category: string }) => l.category === 'Mercado')
+      expect(mercado).toMatchObject({ status: 'ACTIVE', limitCents: 70_000 })
+    })
+
+    it('B não vê o aviso de A', async () => {
+      const res = await app.inject({ method: 'GET', url: '/notifications', headers: asB() })
+      expect(res.statusCode).toBe(200)
+      expect(res.json()).toEqual({ unreadCount: 0, notifications: [] })
+    })
+
+    it('POST /notifications/read de B deixa os avisos de A não lidos', async () => {
+      const read = await app.inject({ method: 'POST', url: '/notifications/read', headers: asB() })
+      expect(read.statusCode).toBe(204)
+      const headers = authHeaders(await signToken(app, { sub: userAId }))
+      const res = await app.inject({ method: 'GET', url: '/notifications', headers })
+      expect(res.json().unreadCount).toBe(1)
+      expect(res.json().notifications[0]).toMatchObject({ title: 'Limite de A', read: false })
     })
   })
 

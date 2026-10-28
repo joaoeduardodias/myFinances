@@ -42,6 +42,11 @@ import { syncAll } from './routes/connections/sync-all'
 import { syncConnectionRoute } from './routes/connections/sync-connection'
 import { getDashboard } from './routes/dashboard/get-dashboard'
 import { health } from './routes/health/health'
+import { declineCategoryLimit } from './routes/limits/decline-category-limit'
+import { getCategoryLimits } from './routes/limits/get-category-limits'
+import { updateCategoryLimit } from './routes/limits/update-category-limit'
+import { getNotifications } from './routes/notifications/get-notifications'
+import { readNotifications } from './routes/notifications/read-notifications'
 import { deletePayslip } from './routes/payslips/delete-payslip'
 import { getPayslip } from './routes/payslips/get-payslip'
 import { getPayslipFile } from './routes/payslips/get-payslip-file'
@@ -166,6 +171,11 @@ app.register(deleteManualTransaction)
 app.register(getCategories)
 app.register(getCategoryNecessities)
 app.register(updateCategoryNecessity)
+app.register(getCategoryLimits)
+app.register(updateCategoryLimit)
+app.register(declineCategoryLimit)
+app.register(getNotifications)
+app.register(readNotifications)
 app.register(getCards)
 app.register(updateCardCycle)
 app.register(getDashboard)
