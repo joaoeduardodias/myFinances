@@ -54,7 +54,9 @@ import { getRecurrences } from './routes/recurrences/get-recurrences'
 import { updateRecurrence } from './routes/recurrences/update-recurrence'
 import { createManualTransaction } from './routes/transactions/create-manual-transaction'
 import { deleteManualTransaction } from './routes/transactions/delete-manual-transaction'
+import { getTransactionSimilar } from './routes/transactions/get-transaction-similar'
 import { getTransactions } from './routes/transactions/get-transactions'
+import { saveTransactionRecurrence } from './routes/transactions/save-transaction-recurrence'
 import { updateTransactionCategory } from './routes/transactions/update-transaction-category'
 import { updateTransactionDescription } from './routes/transactions/update-transaction-description'
 import { updateTransactionNecessity } from './routes/transactions/update-transaction-necessity'
@@ -155,6 +157,8 @@ app.register(dismissRecurrence)
 app.register(getTransactions)
 app.register(updateTransactionCategory)
 app.register(updateTransactionDescription)
+app.register(getTransactionSimilar)
+app.register(saveTransactionRecurrence)
 app.register(updateTransactionNecessity)
 app.register(updateTransactionTransfer)
 app.register(createManualTransaction)

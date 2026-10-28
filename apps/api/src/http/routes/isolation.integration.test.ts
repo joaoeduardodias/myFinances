@@ -21,7 +21,9 @@ import { updatePayslipLines } from './payslips/update-payslip-lines'
 import { dismissRecurrence } from './recurrences/dismiss-recurrence'
 import { getRecurrences } from './recurrences/get-recurrences'
 import { updateRecurrence } from './recurrences/update-recurrence'
+import { getTransactionSimilar } from './transactions/get-transaction-similar'
 import { getTransactions } from './transactions/get-transactions'
+import { saveTransactionRecurrence } from './transactions/save-transaction-recurrence'
 import { updateTransactionCategory } from './transactions/update-transaction-category'
 import { updateTransactionDescription } from './transactions/update-transaction-description'
 import { updateTransactionTransfer } from './transactions/update-transaction-transfer'
@@ -175,6 +177,8 @@ describe('isolamento entre usuários', () => {
       getTransactions,
       updateTransactionCategory,
       updateTransactionDescription,
+      getTransactionSimilar,
+      saveTransactionRecurrence,
       updateTransactionTransfer,
       getRecurrences,
       updateRecurrence,
@@ -289,6 +293,14 @@ describe('isolamento entre usuários', () => {
         (i) => `/transactions/${i.transactionId}/description`,
         { description: 'Outro texto' },
       ],
+      [
+        'PATCH',
+        'transactions/:id/description (parecidas)',
+        (i) => `/transactions/${i.transactionId}/description`,
+        { description: 'Outro texto', applyToSimilar: true },
+      ],
+      ['GET', 'transactions/:id/similar', (i) => `/transactions/${i.transactionId}/similar`],
+      ['POST', 'transactions/:id/recurrence', (i) => `/transactions/${i.transactionId}/recurrence`],
       [
         'PATCH',
         'transactions/:id/transfer',

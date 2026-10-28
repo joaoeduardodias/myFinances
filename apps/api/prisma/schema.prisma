@@ -26,6 +26,7 @@ model User {
   recurrences   Recurrence[]
   payslips      Payslip[]
   categoryNecessities CategoryNecessity[]
+  descriptionRules DescriptionRule[]
 
   @@map("users")
 }
@@ -207,6 +208,18 @@ model CategoryRule {
 
   @@unique([userId, descriptionKey])
   @@map("category_rules")
+}
+
+/// Nome dado pelo usuário a todas as transações com o mesmo texto do banco, inclusive as próximas.
+model DescriptionRule {
+  id             String @id @default(uuid())
+  userId         String @map("user_id")
+  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  descriptionKey String @map("description_key")
+  description    String
+
+  @@unique([userId, descriptionKey])
+  @@map("description_rules")
 }
 
 model Recurrence {

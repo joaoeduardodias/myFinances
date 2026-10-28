@@ -201,6 +201,11 @@ async function syncTransactions(
     select: { descriptionKey: true, category: true },
   })
   const ruleByKey = new Map(rules.map((r) => [r.descriptionKey, r.category]))
+  const names = await prisma.descriptionRule.findMany({
+    where: { userId },
+    select: { descriptionKey: true, description: true },
+  })
+  const nameByKey = new Map(names.map((r) => [r.descriptionKey, r.description]))
 
   for (const account of accounts) {
     const remote = await client.listTransactions(account.pluggyAccountId, dateFrom)
@@ -268,7 +273,11 @@ async function syncTransactions(
       const category = categoryFor(current?.descriptionLocked ? current.descriptionKey : key)
       const date = pluggyDate(tx.date)
       const amountCents = toCents(tx.amount, tx.type)
-      const described = { description: tx.description, descriptionKey: key }
+      // Nome que o usuário deu às parecidas: entra travado, com o texto do banco guardado.
+      const name = key ? nameByKey.get(key) : undefined
+      const described = name
+        ? { description: name, descriptionKey: key, descriptionLocked: true, originalDescription: tx.description }
+        : { description: tx.description, descriptionKey: key }
       const fields = {
         // Um item renovado traz contas novas com as mesmas transações.
         accountId: account.id,

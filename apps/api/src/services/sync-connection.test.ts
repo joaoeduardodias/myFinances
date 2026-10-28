@@ -123,6 +123,7 @@ beforeEach(() => {
   )
   prismaMock.account.update.mockResolvedValue({})
   prismaMock.categoryRule.findMany.mockResolvedValue([])
+  prismaMock.descriptionRule.findMany.mockResolvedValue([])
   // A leitura antes do upsert pede `in`; a das que sumiram da Pluggy, `notIn`;
   // a dos lançamentos do WhatsApp, `whatsappMessageId`.
   prismaMock.transaction.findMany.mockImplementation(async ({ where }) =>
@@ -365,6 +366,26 @@ describe('syncConnection', () => {
     const call = prismaMock.transaction.upsert.mock.calls[0][0]
     expect(call.create.category).toBe('Lazer')
     expect(call.update.category).toBe('Lazer')
+  })
+
+  it('nome dado às parecidas: a transação nova já chega com ele, travada', async () => {
+    prismaMock.descriptionRule.findMany.mockResolvedValue([
+      { descriptionKey: 'ifood restaurante', description: 'Almoço' },
+    ])
+    prismaMock.categoryRule.findMany.mockResolvedValue([
+      { descriptionKey: 'ifood restaurante', category: 'Lazer' },
+    ])
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    const call = prismaMock.transaction.upsert.mock.calls[0][0]
+    expect(call.create).toMatchObject({
+      description: 'Almoço',
+      descriptionKey: 'ifood restaurante',
+      descriptionLocked: true,
+      originalDescription: 'IFOOD *RESTAURANTE',
+      category: 'Lazer',
+    })
   })
 
   it('o mesmo pluggyTransactionId numa conta nova (item renovado) faz update, não create', async () => {
