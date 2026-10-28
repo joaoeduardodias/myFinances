@@ -25,7 +25,13 @@ Este é o projeto 2 de 2 e depende da Análise do ano (`2026-10-27-analise-anual
 5. **Perguntas ao consultor.** A IA recebe um pacote fixo de números calculados pelo app e responde só com base nele, dizendo quando a pergunta foge do pacote. Não há function calling, o que dá uma chamada por pergunta (*chamada minha*). O pacote tem: "Quanto posso gastar" e a data do próximo recebimento, gasto do mês e limite restante por categoria, contas a pagar e totais dos últimos meses. Com isso, "dá para comprar um tênis de R$ 300?" se responde comparando com o que sobra até o salário e no limite de Compras.
    - No app, um campo de pergunta com respostas baseadas nos números dele.
    - Pelo WhatsApp, dentro da conversa (o João pediu, se não fosse custoso). O interpretador do WhatsApp passa a reconhecer que a mensagem é uma pergunta, além de lançamento, e responde com o mesmo motor do app.
-6. **Acompanhar a melhora.** O resumo compara o mês com os anteriores: evitável em queda ou alta, limites respeitados, dívida.
+6. **Acompanhar a melhora.** O resumo compara o mês com os anteriores: evitável em queda ou alta, limites respeitados, dívida. Emergência fica fora de "evitável" aqui também, como na Análise.
+
+## Entregas (*chamada minha*, aceita pelo João em 2026-10-28)
+
+1. Limites por categoria e alarmes, com o sininho no app.
+2. Web Push.
+3. Resumo do consultor e perguntas com o Gemini (app e WhatsApp).
 
 ## Não-objetivos
 
