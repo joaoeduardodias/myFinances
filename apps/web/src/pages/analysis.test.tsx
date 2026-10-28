@@ -5,11 +5,30 @@ import { cloneElement, type ReactElement } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { type Analysis, getAnalysis } from '@/http/analysis'
+import {
+  type Analysis,
+  type AnalysisTransaction,
+  getAnalysis,
+  listAnalysisTransactions,
+  listCategoryNecessities,
+  setCategoryNecessity,
+  setTransactionNecessity,
+} from '@/http/analysis'
+import { listCategories, setTransactionCategory } from '@/http/transactions'
 
 import { AnalysisPage } from './analysis'
 
-vi.mock('@/http/analysis', () => ({ getAnalysis: vi.fn() }))
+vi.mock('@/http/analysis', () => ({
+  getAnalysis: vi.fn(),
+  listAnalysisTransactions: vi.fn(),
+  setTransactionNecessity: vi.fn(),
+  listCategoryNecessities: vi.fn(),
+  setCategoryNecessity: vi.fn(),
+}))
+vi.mock('@/http/transactions', () => ({
+  listCategories: vi.fn(),
+  setTransactionCategory: vi.fn(),
+}))
 // O jsdom não mede layout: o gráfico precisa de um tamanho fixo para desenhar as barras.
 vi.mock('recharts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('recharts')>()),
@@ -96,8 +115,127 @@ function categoryOrder() {
     .map((r) => within(r).getAllByRole('cell')[0].textContent)
 }
 
+const detailRows: AnalysisTransaction[] = [
+  {
+    id: 't1',
+    date: '2026-10-20',
+    description: 'Supermercado Dia',
+    amountCents: -15000,
+    category: 'Mercado',
+    necessity: null,
+    accountName: 'Conta Itaú',
+    group: 'essential',
+    categoryLocked: false,
+  },
+  {
+    id: 't2',
+    date: '2026-10-21',
+    description: 'Compra no cartão',
+    amountCents: -8000,
+    category: 'Mercado',
+    necessity: 'AVOIDABLE',
+    accountName: 'Cartão Nubank',
+    group: 'avoidable',
+    categoryLocked: false,
+  },
+  {
+    id: 't3',
+    date: '2026-10-22',
+    description: 'Estorno mercado',
+    amountCents: 2000,
+    category: 'Mercado',
+    necessity: null,
+    accountName: 'Conta Itaú',
+    group: 'essential',
+    categoryLocked: false,
+  },
+]
+
 describe('AnalysisPage', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(listAnalysisTransactions).mockResolvedValue(detailRows)
+    vi.mocked(listCategories).mockResolvedValue(['Mercado', 'Lazer'])
+    vi.mocked(setTransactionNecessity).mockResolvedValue(undefined)
+    vi.mocked(setTransactionCategory).mockResolvedValue(undefined)
+    vi.mocked(setCategoryNecessity).mockResolvedValue(undefined)
+    vi.mocked(listCategoryNecessities).mockResolvedValue([
+      { category: 'Mercado', necessity: 'ESSENTIAL', isDefault: true },
+      { category: 'Lazer', necessity: 'AVOIDABLE', isDefault: false },
+    ])
+  })
+
+  async function openMercado(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByRole('button', { name: 'Mercado' }))
+    return screen.findByRole('table', { name: 'Transações da categoria' })
+  }
+
+  it('clicar numa categoria abre o detalhe com as transações dela, inclusive de cartão', async () => {
+    const user = userEvent.setup()
+    renderPage({}, '/analise?mes=2026-03')
+    const table = await openMercado(user)
+    expect(listAnalysisTransactions).toHaveBeenCalledWith({
+      category: 'Mercado',
+      month: '2026-03',
+    })
+    expect(within(table).getByText('Supermercado Dia')).toBeInTheDocument()
+    expect(within(table).getByText('Cartão Nubank')).toBeInTheDocument()
+  })
+
+  it('trocar a marca de uma transação chama setTransactionNecessity e atualiza a análise', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await openMercado(user)
+    expect(
+      screen.queryByRole('combobox', { name: 'Marca de Estorno mercado' }),
+    ).toBeNull()
+    const callsBefore = vi.mocked(getAnalysis).mock.calls.length
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Marca de Supermercado Dia' }),
+      'Evitável',
+    )
+    await waitFor(() =>
+      expect(setTransactionNecessity).toHaveBeenCalledWith('t1', 'AVOIDABLE'),
+    )
+    await waitFor(() =>
+      expect(vi.mocked(getAnalysis).mock.calls.length).toBeGreaterThan(
+        callsBefore,
+      ),
+    )
+  })
+
+  it('trocar a categoria no detalhe chama setTransactionCategory', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await openMercado(user)
+    await user.selectOptions(
+      await screen.findByRole('combobox', {
+        name: 'Categoria de Supermercado Dia',
+      }),
+      'Lazer',
+    )
+    await waitFor(() =>
+      expect(setTransactionCategory).toHaveBeenCalledWith('t1', 'Lazer'),
+    )
+  })
+
+  it('diálogo de padrões salva a troca de uma categoria', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(
+      await screen.findByRole('button', { name: 'Essencial ou evitável' }),
+    )
+    expect(
+      await screen.findByText(/Mercado/, { selector: 'td' }),
+    ).toHaveTextContent('Mercado (padrão)')
+    await user.selectOptions(
+      await screen.findByRole('combobox', { name: 'Padrão de Mercado' }),
+      'Evitável',
+    )
+    await waitFor(() =>
+      expect(setCategoryNecessity).toHaveBeenCalledWith('Mercado', 'AVOIDABLE'),
+    )
+  })
 
   it('mostra entrou, saiu e o percentual evitável', async () => {
     renderPage()

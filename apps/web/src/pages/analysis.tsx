@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { AnalysisChart, GROUP_META } from '@/components/analysis-chart'
+import { CategoryTransactionsSheet } from '@/components/category-transactions-sheet'
+import { NecessitySettingsDialog } from '@/components/necessity-settings-dialog'
 import { SortableHead } from '@/components/sortable-head'
 import { Button } from '@/components/ui/button'
 import {
@@ -328,7 +330,7 @@ export function AnalysisPage() {
   const [params, setParams] = useSearchParams()
   const raw = params.get('mes')
   const month = raw && MONTH_PARAM.test(raw) ? raw : undefined
-  // Task 7 abre o detalhe da categoria escolhida ('none' = sem categoria).
+  // Categoria aberta no detalhe ('none' = sem categoria).
   const [openedCategory, setOpenedCategory] = useState<string | null>(null)
   const openCategory = (category: string | 'none') =>
     setOpenedCategory(category)
@@ -351,21 +353,26 @@ export function AnalysisPage() {
     : null
 
   return (
-    <div
-      className="flex w-full flex-col gap-4 p-4 sm:p-6 lg:p-8 xl:gap-6"
-      data-open-category={openedCategory ?? undefined}
-    >
+    <div className="flex w-full flex-col gap-4 p-4 sm:p-6 lg:p-8 xl:gap-6">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Análise</h1>
           {period && <p className="text-muted-foreground text-sm">{period}</p>}
         </div>
-        {month && (
-          <Button variant="outline" size="sm" onClick={() => setParams({})}>
-            Ver 12 meses
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {month && (
+            <Button variant="outline" size="sm" onClick={() => setParams({})}>
+              Ver 12 meses
+            </Button>
+          )}
+          <NecessitySettingsDialog />
+        </div>
       </div>
+      <CategoryTransactionsSheet
+        category={openedCategory}
+        month={month}
+        onClose={() => setOpenedCategory(null)}
+      />
 
       {isPending && <AnalysisSkeleton />}
       {isError && (
