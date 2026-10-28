@@ -76,6 +76,17 @@ describe('PUT /category-necessities/:category', () => {
     expect(prismaMock.categoryNecessity.upsert).not.toHaveBeenCalled()
   })
 
+  it('PUT category-necessities recusa EMERGENCY', async () => {
+    const res = await call(updateCategoryNecessity, {
+      method: 'PUT',
+      url: `/category-necessities/${encodeURIComponent('Delivery')}`,
+      body: { necessity: 'EMERGENCY' },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(prismaMock.categoryNecessity.upsert).not.toHaveBeenCalled()
+    expect(prismaMock.categoryNecessity.deleteMany).not.toHaveBeenCalled()
+  })
+
   it('grava a troca', async () => {
     const res = await call(updateCategoryNecessity, {
       method: 'PUT',

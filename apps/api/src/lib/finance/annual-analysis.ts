@@ -1,6 +1,6 @@
 import type { IsoDate } from '@/lib/today'
 
-import { type Category, DEFAULT_GROUP, type Necessity } from './categories'
+import { type Category, DEFAULT_GROUP, type Necessity, type TransactionNecessity } from './categories'
 import type { AccountType } from './projection'
 
 const ANALYSIS_MONTHS = 12
@@ -12,13 +12,13 @@ export type AnalysisTx = {
   description: string
   amountCents: number
   category: string | null
-  necessity: Necessity | null
+  necessity: TransactionNecessity | null
   isTransfer: boolean
   accountType: AccountType
   accountName: string
 }
 
-export type SpendGroup = 'essential' | 'avoidable' | 'debt' | 'unclassified'
+export type SpendGroup = 'essential' | 'avoidable' | 'emergency' | 'debt' | 'unclassified'
 
 export type AnalysisMonth = {
   /** `YYYY-MM` */
@@ -26,6 +26,7 @@ export type AnalysisMonth = {
   incomeCents: number
   essentialCents: number
   avoidableCents: number
+  emergencyCents: number
   debtCents: number
   unclassifiedCents: number
   investedCents: number
@@ -86,17 +87,24 @@ export function classify(tx: AnalysisTx, overrides: Map<string, Necessity>): Cla
     return { kind: 'ignored' }
   }
 
-  if (tx.necessity) return { kind: 'spend', group: tx.necessity === 'ESSENTIAL' ? 'essential' : 'avoidable' }
+  if (tx.necessity) return { kind: 'spend', group: NECESSITY_GROUP[tx.necessity] }
   return { kind: 'spend', group: group ?? 'unclassified' }
 }
 
+const NECESSITY_GROUP: Record<TransactionNecessity, SpendGroup> = {
+  ESSENTIAL: 'essential',
+  AVOIDABLE: 'avoidable',
+  EMERGENCY: 'emergency',
+}
+
 function emptyTotals(): Omit<AnalysisMonth, 'month'> {
-  return { incomeCents: 0, essentialCents: 0, avoidableCents: 0, debtCents: 0, unclassifiedCents: 0, investedCents: 0 }
+  return { incomeCents: 0, essentialCents: 0, avoidableCents: 0, emergencyCents: 0, debtCents: 0, unclassifiedCents: 0, investedCents: 0 }
 }
 
 const GROUP_FIELD: Record<SpendGroup, keyof Omit<AnalysisMonth, 'month'>> = {
   essential: 'essentialCents',
   avoidable: 'avoidableCents',
+  emergency: 'emergencyCents',
   debt: 'debtCents',
   unclassified: 'unclassifiedCents',
 }
@@ -114,7 +122,7 @@ function toExpense(tx: AnalysisTx, group: SpendGroup): AnalysisExpense {
 
 /**
  * Análise dos últimos 12 meses até hoje: entradas, gastos por grupo
- * (essencial, evitável, dívida, sem classificação) e investido, mês a mês e
+ * (essencial, evitável, emergência, dívida, sem classificação) e investido, mês a mês e
  * por categoria. `month` recorta tudo menos `months` e a média das categorias,
  * que segue sendo dos 12 meses para comparar o mês com ela.
  */

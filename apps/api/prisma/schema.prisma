@@ -266,6 +266,7 @@ model PayslipLine {
 enum Necessity {
   ESSENTIAL
   AVOIDABLE
+  EMERGENCY
 }
 
 /// Troca do João sobre o padrão essencial/evitável de uma categoria.

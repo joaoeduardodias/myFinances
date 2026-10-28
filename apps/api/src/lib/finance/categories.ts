@@ -25,6 +25,8 @@ export const CATEGORIES = [
 export type Category = (typeof CATEGORIES)[number]
 
 export type Necessity = 'ESSENTIAL' | 'AVOIDABLE'
+/** Marca da transação: além do padrão de categoria, vale a emergência. */
+export type TransactionNecessity = Necessity | 'EMERGENCY'
 
 export type CategoryGroup =
   | 'income'

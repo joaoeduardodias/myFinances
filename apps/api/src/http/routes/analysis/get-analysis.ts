@@ -9,11 +9,12 @@ import { loadAnalysisInput } from '@/services/load-analysis'
 import { assertMonthInWindow, monthQuerySchema } from './month-query'
 
 const cents = z.number().int()
-const group = z.enum(['essential', 'avoidable', 'debt', 'unclassified'])
+const group = z.enum(['essential', 'avoidable', 'emergency', 'debt', 'unclassified'])
 const totalsSchema = z.object({
   incomeCents: cents,
   essentialCents: cents,
   avoidableCents: cents,
+  emergencyCents: cents,
   debtCents: cents,
   unclassifiedCents: cents,
   investedCents: cents,
@@ -25,7 +26,7 @@ export const expenseSchema = z.object({
   description: z.string(),
   amountCents: cents,
   category: z.string().nullable(),
-  necessity: z.enum(['ESSENTIAL', 'AVOIDABLE']).nullable(),
+  necessity: z.enum(['ESSENTIAL', 'AVOIDABLE', 'EMERGENCY']).nullable(),
   accountName: z.string(),
   group,
 })

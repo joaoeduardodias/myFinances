@@ -198,6 +198,20 @@ describe('PATCH /transactions/:id/necessity', () => {
     })
   })
 
+  it('PATCH necessity aceita EMERGENCY', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue({ id: txId, amountCents: -4500, isTransfer: false })
+    const res = await call(updateTransactionNecessity, {
+      method: 'PATCH',
+      url,
+      body: { necessity: 'EMERGENCY' },
+    })
+    expect(res.statusCode).toBe(204)
+    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+      where: { id: txId },
+      data: { necessity: 'EMERGENCY' },
+    })
+  })
+
   it('null tira a marca', async () => {
     prismaMock.transaction.findFirst.mockResolvedValue({ id: txId, amountCents: -4500, isTransfer: false })
     const res = await call(updateTransactionNecessity, { method: 'PATCH', url, body: { necessity: null } })

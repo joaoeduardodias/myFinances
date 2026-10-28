@@ -39,7 +39,7 @@ describe('annualAnalysis', () => {
     expect(classify(transfers[0], none)).toEqual({ kind: 'ignored' })
     const a = run(transfers)
     expect(a.totals).toEqual({
-      incomeCents: 0, essentialCents: 0, avoidableCents: 0, debtCents: 0, unclassifiedCents: 0, investedCents: 0,
+      incomeCents: 0, essentialCents: 0, avoidableCents: 0, emergencyCents: 0, debtCents: 0, unclassifiedCents: 0, investedCents: 0,
     })
     expect(a.categories).toEqual([])
     expect(a.topExpenses).toEqual([])
@@ -139,7 +139,7 @@ describe('annualAnalysis', () => {
       '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10',
     ])
     expect(old.months[0]).toEqual({
-      month: '2025-11', incomeCents: 0, essentialCents: 0, avoidableCents: 0, debtCents: 0, unclassifiedCents: 0, investedCents: 0,
+      month: '2025-11', incomeCents: 0, essentialCents: 0, avoidableCents: 0, emergencyCents: 0, debtCents: 0, unclassifiedCents: 0, investedCents: 0,
     })
     expect(old.categories.find((c) => c.category === 'Mercado')?.averageCents).toBe(1000)
 
@@ -185,6 +185,20 @@ describe('annualAnalysis', () => {
     expect(a.topExpenses[0]).not.toHaveProperty('accountType')
     expect(a.topAvoidable.map((e) => e.amountCents)).toEqual([-1100, -900, -700, -500, -300, -100])
     expect(a.topAvoidable.every((e) => e.group === 'avoidable')).toBe(true)
+  })
+
+  it('emergência é grupo próprio e vence dívida e sem categoria', () => {
+    const a = run([
+      tx({ amountCents: -5000, category: 'Carro', description: 'Carro', necessity: 'EMERGENCY' }),
+      tx({ amountCents: -2000, category: 'Dívidas e juros', necessity: 'EMERGENCY' }),
+      tx({ amountCents: -1000, category: null, necessity: 'EMERGENCY' }),
+    ])
+    expect(a.totals.emergencyCents).toBe(8000)
+    expect(a.totals.debtCents).toBe(0)
+    expect(a.totals.unclassifiedCents).toBe(0)
+    expect(a.totals.essentialCents).toBe(0)
+    expect(a.topAvoidable).toEqual([])
+    expect(a.topExpenses[0].group).toBe('emergency')
   })
 
   it('uncategorized conta só débitos sem categoria', () => {

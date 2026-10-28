@@ -21,7 +21,7 @@ export async function updateTransactionNecessity(app: FastifyInstance) {
           operationId: 'updateTransactionNecessity',
           security: [{ bearerAuth: [] }],
           params: z.object({ id: z.uuid() }),
-          body: z.object({ necessity: z.enum(['ESSENTIAL', 'AVOIDABLE']).nullable() }),
+          body: z.object({ necessity: z.enum(['ESSENTIAL', 'AVOIDABLE', 'EMERGENCY']).nullable() }),
           response: { 204: z.null() },
         },
       },

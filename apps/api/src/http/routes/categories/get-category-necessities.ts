@@ -19,7 +19,10 @@ export async function loadNecessityOverrides(userId: string): Promise<Map<string
     select: { category: true, necessity: true },
     where: { userId },
   })
-  return new Map(rows.map((r) => [r.category, r.necessity]))
+  // O enum do banco tem EMERGENCY (só de transação); padrão de categoria nunca o grava.
+  return new Map(
+    rows.flatMap((r): [string, NecessityValue][] => (r.necessity === 'EMERGENCY' ? [] : [[r.category, r.necessity]])),
+  )
 }
 
 export async function getCategoryNecessities(app: FastifyInstance) {
