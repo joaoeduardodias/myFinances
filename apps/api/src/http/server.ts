@@ -56,6 +56,7 @@ import { createManualTransaction } from './routes/transactions/create-manual-tra
 import { deleteManualTransaction } from './routes/transactions/delete-manual-transaction'
 import { getTransactions } from './routes/transactions/get-transactions'
 import { updateTransactionCategory } from './routes/transactions/update-transaction-category'
+import { updateTransactionDescription } from './routes/transactions/update-transaction-description'
 import { updateTransactionNecessity } from './routes/transactions/update-transaction-necessity'
 import { updateTransactionTransfer } from './routes/transactions/update-transaction-transfer'
 import { registerPluggyWebhook } from './routes/webhooks/pluggy-webhook'
@@ -153,6 +154,7 @@ app.register(updateRecurrence)
 app.register(dismissRecurrence)
 app.register(getTransactions)
 app.register(updateTransactionCategory)
+app.register(updateTransactionDescription)
 app.register(updateTransactionNecessity)
 app.register(updateTransactionTransfer)
 app.register(createManualTransaction)

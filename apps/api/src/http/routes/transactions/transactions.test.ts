@@ -15,6 +15,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 
 const { getTransactions } = await import('./get-transactions')
 const { updateTransactionCategory } = await import('./update-transaction-category')
+const { updateTransactionDescription } = await import('./update-transaction-description')
 const { updateTransactionNecessity } = await import('./update-transaction-necessity')
 const { updateTransactionTransfer } = await import('./update-transaction-transfer')
 const { createManualTransaction } = await import('./create-manual-transaction')
@@ -250,6 +251,90 @@ describe('PATCH /transactions/:id/necessity', () => {
       body: { necessity: 'ESSENTIAL' },
     })
     expect(transfer.statusCode).toBe(400)
+    expect(prismaMock.transaction.update).not.toHaveBeenCalled()
+  })
+})
+
+describe('PATCH /transactions/:id/description', () => {
+  const url = `/transactions/${txId}/description`
+  const patch = (description: string, user?: string) =>
+    call(updateTransactionDescription, { method: 'PATCH', url, body: { description }, user })
+
+  it('PATCH description de transação da Pluggy trava e guarda o texto do banco', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue({
+      source: 'PLUGGY',
+      description: 'PIX JOAO',
+      originalDescription: null,
+    })
+    const res = await patch('Almoço com Ana')
+    expect(res.statusCode).toBe(204)
+    expect(prismaMock.transaction.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: txId, userId: userA } }),
+    )
+    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+      where: { id: txId },
+      data: { description: 'Almoço com Ana', descriptionLocked: true, originalDescription: 'PIX JOAO' },
+    })
+    expect(prismaMock.transaction.update.mock.calls[0][0].data).not.toHaveProperty('descriptionKey')
+  })
+
+  it('segunda edição mantém o texto do banco', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue({
+      source: 'PLUGGY',
+      description: 'Almoço com Ana',
+      originalDescription: 'PIX JOAO',
+    })
+    const res = await patch('Almoço')
+    expect(res.statusCode).toBe(204)
+    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+      where: { id: txId },
+      data: { description: 'Almoço', descriptionLocked: true, originalDescription: 'PIX JOAO' },
+    })
+  })
+
+  it('lançamento manual só troca a descrição', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue({
+      source: 'MANUAL',
+      description: 'Posto',
+      originalDescription: null,
+    })
+    const res = await patch('Gasolina')
+    expect(res.statusCode).toBe(204)
+    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+      where: { id: txId },
+      data: { description: 'Gasolina' },
+    })
+  })
+
+  it('descrição vazia volta o texto do banco', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue({
+      source: 'PLUGGY',
+      description: 'Almoço',
+      originalDescription: 'PIX JOAO',
+    })
+    const res = await patch('   ')
+    expect(res.statusCode).toBe(204)
+    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+      where: { id: txId },
+      data: { description: 'PIX JOAO', descriptionLocked: false, originalDescription: null },
+    })
+  })
+
+  it('descrição vazia em lançamento manual dá 400', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue({
+      source: 'MANUAL',
+      description: 'Gasolina',
+      originalDescription: null,
+    })
+    const res = await patch('')
+    expect(res.statusCode).toBe(400)
+    expect(prismaMock.transaction.update).not.toHaveBeenCalled()
+  })
+
+  it('descrição de transação de outro usuário dá 404', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue(null)
+    const res = await patch('Almoço', userB)
+    expect(res.statusCode).toBe(404)
     expect(prismaMock.transaction.update).not.toHaveBeenCalled()
   })
 })
