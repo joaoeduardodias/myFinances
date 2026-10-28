@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router-dom'
 
 import { AppLayout } from '@/components/app-layout'
 import { ProtectedRoute } from '@/components/protected-route'
+import { AnalysisPage } from '@/pages/analysis'
 import { CardDetail } from '@/pages/card-detail'
 import { Cards } from '@/pages/cards'
 import { Connections } from '@/pages/connections'
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
         children: [
           { path: '/', element: <Home /> },
           { path: '/transacoes', element: <Transactions /> },
+          { path: '/analise', element: <AnalysisPage /> },
           { path: '/cartoes', element: <Cards /> },
           { path: '/cartoes/:id', element: <CardDetail /> },
           { path: '/recorrentes', element: <Recurring /> },

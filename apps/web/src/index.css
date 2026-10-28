@@ -24,6 +24,10 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-income: var(--income);
+  --color-essential: var(--essential);
+  --color-avoidable: var(--avoidable);
+  --color-debt: var(--debt);
+  --color-unclassified: var(--unclassified);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -64,6 +68,10 @@
   --accent-foreground: oklch(0.21 0.006 285.885);
   --destructive: oklch(0.577 0.245 27.325);
   --income: oklch(0.527 0.154 150.069);
+  --essential: oklch(0.52 0.15 255);
+  --avoidable: oklch(0.68 0.17 55);
+  --debt: oklch(0.5 0.2 20);
+  --unclassified: oklch(0.68 0.01 286);
   --border: oklch(0.92 0.004 286.32);
   --input: oklch(0.92 0.004 286.32);
   --ring: oklch(0.705 0.015 286.067);
@@ -100,6 +108,10 @@
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --income: oklch(0.765 0.177 163.223);
+  --essential: oklch(0.68 0.15 250);
+  --avoidable: oklch(0.78 0.16 65);
+  --debt: oklch(0.65 0.21 20);
+  --unclassified: oklch(0.6 0.01 286);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.552 0.016 285.938);

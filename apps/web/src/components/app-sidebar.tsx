@@ -1,4 +1,5 @@
 import {
+  ChartPieIcon,
   CreditCardIcon,
   FileTextIcon,
   HomeIcon,
@@ -26,6 +27,7 @@ import {
 const navItems = [
   { to: '/', label: 'Início', icon: HomeIcon, end: true },
   { to: '/transacoes', label: 'Transações', icon: WalletIcon },
+  { to: '/analise', label: 'Análise', icon: ChartPieIcon },
   { to: '/cartoes', label: 'Cartões', icon: CreditCardIcon },
   { to: '/recorrentes', label: 'Recorrentes', icon: RepeatIcon },
   { to: '/holerites', label: 'Holerites', icon: FileTextIcon },

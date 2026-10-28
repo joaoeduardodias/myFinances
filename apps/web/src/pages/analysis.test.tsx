@@ -1,0 +1,173 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { cloneElement, type ReactElement } from 'react'
+import { MemoryRouter, useLocation } from 'react-router-dom'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { type Analysis, getAnalysis } from '@/http/analysis'
+
+import { AnalysisPage } from './analysis'
+
+vi.mock('@/http/analysis', () => ({ getAnalysis: vi.fn() }))
+// O jsdom não mede layout: o gráfico precisa de um tamanho fixo para desenhar as barras.
+vi.mock('recharts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('recharts')>()),
+  ResponsiveContainer: ({ children }: { children: ReactElement }) =>
+    cloneElement(children, { width: 900, height: 360 } as object),
+}))
+
+const months = Array.from({ length: 12 }, (_, i) => ({
+  month: `${i < 2 ? 2025 : 2026}-${String(((i + 10) % 12) + 1).padStart(2, '0')}`,
+  incomeCents: 100000,
+  essentialCents: 40000,
+  avoidableCents: 10000,
+  debtCents: 0,
+  unclassifiedCents: 0,
+  investedCents: 0,
+}))
+
+const base: Analysis = {
+  from: '2025-11-01',
+  to: '2026-10-27',
+  month: null,
+  months,
+  totals: {
+    incomeCents: 1300000,
+    essentialCents: 600000,
+    avoidableCents: 200000,
+    debtCents: 100000,
+    unclassifiedCents: 100000,
+    investedCents: 0,
+  },
+  categories: [
+    {
+      category: 'Mercado',
+      group: 'essential',
+      totalCents: 500000,
+      averageCents: 41667,
+      count: 30,
+    },
+    {
+      category: 'Lazer',
+      group: 'avoidable',
+      totalCents: 200000,
+      averageCents: 16667,
+      count: 5,
+    },
+    {
+      category: 'Saúde',
+      group: 'essential',
+      totalCents: -3000,
+      averageCents: -250,
+      count: 2,
+    },
+  ],
+  topExpenses: [],
+  topAvoidable: [],
+  uncategorized: { count: 0, totalCents: 0 },
+}
+
+function Where() {
+  const { search } = useLocation()
+  return <output data-testid="search">{search}</output>
+}
+
+function renderPage(data: Partial<Analysis> = {}, url = '/analise') {
+  vi.mocked(getAnalysis).mockResolvedValue({ ...base, ...data })
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[url]}>
+        <AnalysisPage />
+        <Where />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
+function categoryOrder() {
+  const table = screen.getByRole('table', { name: /para onde foi/i })
+  return within(table)
+    .getAllByRole('row')
+    .slice(1)
+    .map((r) => within(r).getAllByRole('cell')[0].textContent)
+}
+
+describe('AnalysisPage', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('mostra entrou, saiu e o percentual evitável', async () => {
+    renderPage()
+    const kpis = await screen.findByRole('region', { name: 'Indicadores' })
+    expect(within(kpis).getByText('R$ 13.000,00')).toBeInTheDocument()
+    // Saiu = 6000 + 2000 + 1000 + 1000
+    expect(within(kpis).getByText('R$ 10.000,00')).toBeInTheDocument()
+    expect(within(kpis).getByText('R$ 2.000,00')).toBeInTheDocument()
+    expect(within(kpis).getByText('20% do que saiu')).toBeInTheDocument()
+    expect(screen.getByText('nov/2025 – out/2026')).toBeInTheDocument()
+  })
+
+  it('mostra o aviso de sem categoria só quando há', async () => {
+    renderPage()
+    await screen.findByRole('region', { name: 'Indicadores' })
+    expect(screen.queryByText(/sem categoria somando/)).not.toBeInTheDocument()
+  })
+
+  it('mostra o aviso quando há transações sem categoria', async () => {
+    renderPage({ uncategorized: { count: 3, totalCents: 45050 } })
+    expect(
+      await screen.findByText('3 transações sem categoria somando R$ 450,50'),
+    ).toBeInTheDocument()
+  })
+
+  it('clicar num mês filtra pela URL e mostra "Ver 12 meses"', async () => {
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await screen.findByRole('region', { name: 'Indicadores' })
+    expect(screen.queryByRole('button', { name: 'Ver 12 meses' })).toBeNull()
+
+    const bars = await waitFor(() => {
+      const found = container.querySelectorAll('.recharts-bar-rectangle')
+      expect(found.length).toBeGreaterThan(0)
+      return found
+    })
+    await user.click(bars[0])
+
+    await waitFor(() =>
+      expect(screen.getByTestId('search')).toHaveTextContent('?mes=2025-11'),
+    )
+    expect(getAnalysis).toHaveBeenLastCalledWith('2025-11')
+    await user.click(
+      await screen.findByRole('button', { name: 'Ver 12 meses' }),
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('search')).toHaveTextContent(/^$/),
+    )
+  })
+
+  it('mostra o mês filtrado no cabeçalho', async () => {
+    renderPage({ month: '2026-03' }, '/analise?mes=2026-03')
+    expect(await screen.findByText('mar/2026')).toBeInTheDocument()
+    expect(getAnalysis).toHaveBeenCalledWith('2026-03')
+  })
+
+  it('ordena a tabela de categorias ao clicar no cabeçalho', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByRole('table', { name: /para onde foi/i })
+    expect(categoryOrder()).toEqual(['Mercado', 'Lazer', 'Saúde'])
+
+    await user.click(screen.getByRole('button', { name: 'Categoria' }))
+    expect(categoryOrder()).toEqual(['Lazer', 'Mercado', 'Saúde'])
+    await user.click(screen.getByRole('button', { name: 'Categoria' }))
+    expect(categoryOrder()).toEqual(['Saúde', 'Mercado', 'Lazer'])
+  })
+
+  it('valor negativo de categoria aparece com sinal', async () => {
+    renderPage()
+    expect(await screen.findByText('-R$ 30,00')).toBeInTheDocument()
+  })
+})
