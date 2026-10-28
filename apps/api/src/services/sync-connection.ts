@@ -248,6 +248,7 @@ async function syncTransactions(
         whatsappMessageId: true,
         category: true,
         categoryLocked: true,
+        necessity: true,
       },
     })
     const manualById = new Map(manuals.map((m) => [m.id, m]))
@@ -299,6 +300,8 @@ async function syncTransactions(
               originalDescription: tx.description,
               // A regra do usuário vale pelo nome que ele deu.
               category: categoryFor(match.descriptionKey),
+              // A marca na mão (essencial/evitável) acompanha o lançamento.
+              necessity: match.necessity,
               ...(match.categoryLocked ? { category: match.category, categoryLocked: true } : {}),
             },
           })

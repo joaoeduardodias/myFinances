@@ -21,6 +21,7 @@ const pendente = {
   amountCents: -3500,
   category: 'Restaurante',
   categoryLocked: true,
+  necessity: null,
   source: 'PLUGGY',
   descriptionLocked: true,
   whatsappMessageId: 'wamid.1',
@@ -46,11 +47,18 @@ describe('removeTransactions', () => {
         amountCents: -3500,
         category: 'Restaurante',
         categoryLocked: true,
+        necessity: null,
         whatsappMessageId: 'wamid.1',
         source: 'MANUAL',
         status: 'POSTED',
       },
     })
+  })
+
+  it('a marca na mão volta junto com o lançamento', async () => {
+    prismaMock.transaction.findMany.mockResolvedValue([{ ...pendente, necessity: 'AVOIDABLE' }])
+    await removeTransactions({ accountId: 'acc-1' })
+    expect(prismaMock.transaction.create.mock.calls[0][0].data).toMatchObject({ necessity: 'AVOIDABLE' })
   })
 
   it('linha sem descrição travada não é recriada', async () => {

@@ -248,6 +248,15 @@ describe('AnalysisPage', () => {
     expect(screen.getByText('nov/2025 – out/2026')).toBeInTheDocument()
   })
 
+  it('mostra o investido à parte, fora do que saiu', async () => {
+    renderPage({ totals: { ...base.totals, investedCents: 123400 } })
+    const kpis = await screen.findByRole('region', { name: 'Indicadores' })
+    expect(within(kpis).getByText('Investido')).toBeInTheDocument()
+    expect(within(kpis).getByText('R$ 1.234,00')).toBeInTheDocument()
+    // Saiu continua 6000 + 2000 + 1000 + 1000
+    expect(within(kpis).getByText('R$ 10.000,00')).toBeInTheDocument()
+  })
+
   it('mostra o aviso de sem categoria só quando há', async () => {
     renderPage()
     await screen.findByRole('region', { name: 'Indicadores' })

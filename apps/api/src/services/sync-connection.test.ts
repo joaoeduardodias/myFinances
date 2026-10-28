@@ -526,6 +526,17 @@ describe('syncConnection', () => {
     })
   })
 
+  it('a marca na mão do lançamento passa para a transação da Pluggy', async () => {
+    manualRows = [manual({ necessity: 'AVOIDABLE' })]
+    const client = makeClient({
+      listTransactions: vi.fn(async () => [pluggyTx({ date: TODAY, amount: 45 })]),
+    })
+
+    await syncConnection('conn-1', { client, today: TODAY })
+
+    expect(prismaMock.transaction.create.mock.calls[0][0].data).toMatchObject({ necessity: 'AVOIDABLE' })
+  })
+
   it('dois lançamentos iguais casam com duas transações diferentes', async () => {
     manualRows = [
       manual({ id: 'manual-1', amountCents: -800, whatsappMessageId: 'wamid.1' }),
@@ -899,6 +910,7 @@ type ManualRow = {
   whatsappMessageId: string
   category: string | null
   categoryLocked: boolean
+  necessity: string | null
 }
 
 function manual(extra: Partial<ManualRow>): ManualRow {
@@ -913,6 +925,7 @@ function manual(extra: Partial<ManualRow>): ManualRow {
     whatsappMessageId: 'wamid.1',
     category: null,
     categoryLocked: false,
+    necessity: null,
     ...extra,
   }
 }

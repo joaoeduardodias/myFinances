@@ -56,8 +56,8 @@ export function CategoryTransactionsSheet({ category, month, onClose }: Props) {
 
   const invalidate = () =>
     Promise.all(
-      ['analysis', 'analysis-transactions'].map((key) =>
-        queryClient.invalidateQueries({ queryKey: [key] }),
+      ['analysis', 'analysis-transactions', 'transactions', 'dashboard'].map(
+        (key) => queryClient.invalidateQueries({ queryKey: [key] }),
       ),
     )
 

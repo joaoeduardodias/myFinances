@@ -98,7 +98,7 @@ function Indicators({ totals }: { totals: Analysis['totals'] }) {
   return (
     <section
       aria-label="Indicadores"
-      className="grid gap-4 sm:grid-cols-3 2xl:grid-cols-6"
+      className="grid gap-4 sm:grid-cols-3 2xl:grid-cols-7"
     >
       <Kpi label="Entrou" valueCents={totals.incomeCents} tone="text-income" />
       <Kpi label="Saiu" valueCents={spent} />
@@ -122,6 +122,7 @@ function Indicators({ totals }: { totals: Analysis['totals'] }) {
         valueCents={totals.debtCents}
         hint={`${share(totals.debtCents, spent)} do que saiu`}
       />
+      <Kpi label="Investido" valueCents={totals.investedCents} />
     </section>
   )
 }
