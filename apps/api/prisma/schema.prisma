@@ -27,6 +27,10 @@ model User {
   payslips      Payslip[]
   categoryNecessities CategoryNecessity[]
   descriptionRules DescriptionRule[]
+  categoryLimits CategoryLimit[]
+  notifications Notification[]
+  // Avisar quando o "Quanto posso gastar" ficar negativo.
+  spendableNegative Boolean @default(false) @map("spendable_negative")
 
   @@map("users")
 }
@@ -292,4 +296,47 @@ model CategoryNecessity {
 
   @@unique([userId, category])
   @@map("category_necessities")
+}
+
+enum LimitStatus {
+  ACTIVE
+  DECLINED
+}
+
+model CategoryLimit {
+  id            String      @id @default(uuid())
+  userId        String      @map("user_id")
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category      String
+  status        LimitStatus
+  /// Nulo só quando DECLINED.
+  limitCents    Int?        @map("limit_cents")
+  /// Último mês (YYYY-MM) em que o limite foi revisado.
+  reviewedMonth String?     @map("reviewed_month")
+
+  @@unique([userId, category])
+  @@map("category_limits")
+}
+
+enum NotificationKind {
+  SPENDABLE_NEGATIVE
+  CATEGORY_WARNING
+  CATEGORY_EXCEEDED
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      NotificationKind
+  /// Nulo nos avisos de saldo: o Postgres aceita vários nulos no unique.
+  dedupeKey String?          @map("dedupe_key")
+  title     String
+  body      String
+  createdAt DateTime         @default(now()) @map("created_at")
+  readAt    DateTime?        @map("read_at")
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, createdAt])
+  @@map("notifications")
 }
