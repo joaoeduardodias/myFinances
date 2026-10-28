@@ -6,6 +6,7 @@ import { AnalysisChart, GROUP_META } from '@/components/analysis-chart'
 import { CategoryTransactionsSheet } from '@/components/category-transactions-sheet'
 import { NecessitySettingsDialog } from '@/components/necessity-settings-dialog'
 import { SortableHead } from '@/components/sortable-head'
+import { TransactionDialog } from '@/components/transaction-dialog'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -259,6 +260,7 @@ function ExpensesTable({
   expenses: AnalysisExpense[]
 }) {
   const [sort, setSort] = useState<Sort<ExpenseColumn> | null>(null)
+  const [selected, setSelected] = useState<AnalysisExpense | null>(null)
   const rows = sort
     ? sortRows(expenses, sort, (e, column) => {
         switch (column) {
@@ -306,11 +308,26 @@ function ExpensesTable({
           </TableHeader>
           <TableBody>
             {rows.map((e) => (
-              <TableRow key={e.id}>
+              <TableRow
+                key={e.id}
+                className="cursor-pointer"
+                onClick={() => setSelected(e)}
+              >
                 <TableCell className="tabular-nums">
                   {formatDate(e.date)}
                 </TableCell>
-                <TableCell>{e.description}</TableCell>
+                <TableCell>
+                  <button
+                    type="button"
+                    className="text-left underline-offset-4 hover:underline"
+                    onClick={(ev) => {
+                      ev.stopPropagation()
+                      setSelected(e)
+                    }}
+                  >
+                    {e.description}
+                  </button>
+                </TableCell>
                 <TableCell>{e.accountName}</TableCell>
                 <TableCell>{GROUP_META[e.group].label}</TableCell>
                 <TableCell className="tabular-nums">
@@ -321,6 +338,10 @@ function ExpensesTable({
           </TableBody>
         </Table>
       </CardContent>
+      <TransactionDialog
+        transaction={selected}
+        onClose={() => setSelected(null)}
+      />
     </Card>
   )
 }

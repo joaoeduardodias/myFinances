@@ -12,6 +12,7 @@ import {
   listAnalysisTransactions,
   listCategoryNecessities,
   setCategoryNecessity,
+  setTransactionDescription,
   setTransactionNecessity,
 } from '@/http/analysis'
 import { listCategories, setTransactionCategory } from '@/http/transactions'
@@ -22,6 +23,7 @@ vi.mock('@/http/analysis', () => ({
   getAnalysis: vi.fn(),
   listAnalysisTransactions: vi.fn(),
   setTransactionNecessity: vi.fn(),
+  setTransactionDescription: vi.fn(),
   listCategoryNecessities: vi.fn(),
   setCategoryNecessity: vi.fn(),
 }))
@@ -159,6 +161,7 @@ describe('AnalysisPage', () => {
     vi.mocked(listAnalysisTransactions).mockResolvedValue(detailRows)
     vi.mocked(listCategories).mockResolvedValue(['Mercado', 'Lazer'])
     vi.mocked(setTransactionNecessity).mockResolvedValue(undefined)
+    vi.mocked(setTransactionDescription).mockResolvedValue(undefined)
     vi.mocked(setTransactionCategory).mockResolvedValue(undefined)
     vi.mocked(setCategoryNecessity).mockResolvedValue(undefined)
     vi.mocked(listCategoryNecessities).mockResolvedValue([
@@ -184,41 +187,128 @@ describe('AnalysisPage', () => {
     expect(within(table).getByText('Cartão Nubank')).toBeInTheDocument()
   })
 
-  it('trocar a marca de uma transação chama setTransactionNecessity e atualiza a análise', async () => {
+  const gasto = {
+    id: 'e1',
+    date: '2026-10-10',
+    description: 'Oficina',
+    amountCents: -30000,
+    category: 'Mercado',
+    necessity: null,
+    accountName: 'Nubank',
+    group: 'essential' as const,
+  }
+
+  it('clicar em maiores gastos abre a transação e salva descrição e categoria', async () => {
     const user = userEvent.setup()
-    renderPage()
-    await openMercado(user)
-    expect(
-      screen.queryByRole('combobox', { name: 'Marca de Estorno mercado' }),
-    ).toBeNull()
-    const callsBefore = vi.mocked(getAnalysis).mock.calls.length
+    renderPage({ topExpenses: [gasto] })
+    const table = await screen.findByRole('table', { name: 'Maiores gastos' })
+    await user.click(within(table).getByText('Oficina'))
+    const dialog = await screen.findByRole('dialog')
+    const desc = within(dialog).getByLabelText('Descrição')
+    await user.clear(desc)
+    await user.type(desc, 'Conserto do carro')
     await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Marca de Supermercado Dia' }),
-      'Evitável',
+      within(dialog).getByLabelText('Categoria'),
+      'Lazer',
     )
+    const callsBefore = vi.mocked(getAnalysis).mock.calls.length
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar' }))
     await waitFor(() =>
-      expect(setTransactionNecessity).toHaveBeenCalledWith('t1', 'AVOIDABLE'),
-    )
-    await waitFor(() =>
-      expect(vi.mocked(getAnalysis).mock.calls.length).toBeGreaterThan(
-        callsBefore,
+      expect(setTransactionDescription).toHaveBeenCalledWith(
+        'e1',
+        'Conserto do carro',
       ),
+    )
+    expect(setTransactionCategory).toHaveBeenCalledWith('e1', 'Lazer')
+    expect(setTransactionNecessity).not.toHaveBeenCalled()
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(vi.mocked(getAnalysis).mock.calls.length).toBeGreaterThan(
+      callsBefore,
     )
   })
 
-  it('trocar a categoria no detalhe chama setTransactionCategory', async () => {
+  it('salvar sem mudar nada não chama nenhuma rota', async () => {
+    const user = userEvent.setup()
+    renderPage({ topExpenses: [gasto] })
+    const table = await screen.findByRole('table', { name: 'Maiores gastos' })
+    await user.click(within(table).getByText('Oficina'))
+    await user.click(await screen.findByRole('button', { name: 'Salvar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(setTransactionDescription).not.toHaveBeenCalled()
+    expect(setTransactionCategory).not.toHaveBeenCalled()
+    expect(setTransactionNecessity).not.toHaveBeenCalled()
+  })
+
+  it('marcar emergência pela janela', async () => {
+    const user = userEvent.setup()
+    renderPage({ topExpenses: [gasto] })
+    const table = await screen.findByRole('table', { name: 'Maiores gastos' })
+    await user.click(within(table).getByText('Oficina'))
+    const dialog = await screen.findByRole('dialog')
+    await user.selectOptions(
+      within(dialog).getByLabelText('Marca'),
+      'Emergência',
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar' }))
+    await waitFor(() =>
+      expect(setTransactionNecessity).toHaveBeenCalledWith('e1', 'EMERGENCY'),
+    )
+    expect(setTransactionDescription).not.toHaveBeenCalled()
+    expect(setTransactionCategory).not.toHaveBeenCalled()
+  })
+
+  it('erro ao salvar mostra aviso e mantém a janela aberta', async () => {
+    vi.mocked(setTransactionDescription).mockRejectedValue(new Error('400'))
+    const user = userEvent.setup()
+    renderPage({ topExpenses: [gasto] })
+    const table = await screen.findByRole('table', { name: 'Maiores gastos' })
+    await user.click(within(table).getByText('Oficina'))
+    const dialog = await screen.findByRole('dialog')
+    await user.clear(within(dialog).getByLabelText('Descrição'))
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar' }))
+    await waitFor(() => expect(setTransactionDescription).toHaveBeenCalled())
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('dava pra evitar abre a mesma janela', async () => {
+    const user = userEvent.setup()
+    renderPage({
+      topAvoidable: [{ ...gasto, id: 'a1', description: 'Cinema' }],
+    })
+    const table = await screen.findByRole('table', { name: 'Dava pra evitar' })
+    await user.click(within(table).getByText('Cinema'))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByLabelText('Descrição')).toHaveValue('Cinema')
+  })
+
+  it('linha do detalhe da categoria abre a janela; crédito não tem marca', async () => {
     const user = userEvent.setup()
     renderPage()
-    await openMercado(user)
+    const table = await openMercado(user)
+    expect(within(table).queryByRole('combobox')).toBeNull()
+    await user.click(within(table).getByText('Estorno mercado'))
+    const dialog = await screen.findByRole('dialog', { name: 'Transação' })
+    expect(within(dialog).getByLabelText('Descrição')).toHaveValue(
+      'Estorno mercado',
+    )
+    expect(within(dialog).queryByLabelText('Marca')).toBeNull()
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Transação' })).toBeNull(),
+    )
+
+    await user.click(within(table).getByText('Supermercado Dia'))
+    const debito = await screen.findByRole('dialog', { name: 'Transação' })
+    await user.selectOptions(within(debito).getByLabelText('Marca'), 'Evitável')
     await user.selectOptions(
-      await screen.findByRole('combobox', {
-        name: 'Categoria de Supermercado Dia',
-      }),
+      within(debito).getByLabelText('Categoria'),
       'Lazer',
     )
+    await user.click(within(debito).getByRole('button', { name: 'Salvar' }))
     await waitFor(() =>
-      expect(setTransactionCategory).toHaveBeenCalledWith('t1', 'Lazer'),
+      expect(setTransactionNecessity).toHaveBeenCalledWith('t1', 'AVOIDABLE'),
     )
+    expect(setTransactionCategory).toHaveBeenCalledWith('t1', 'Lazer')
   })
 
   it('diálogo de padrões salva a troca de uma categoria', async () => {
