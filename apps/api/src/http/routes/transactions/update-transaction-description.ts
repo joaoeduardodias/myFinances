@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 import { auth } from '@/http/middlewares/auth'
 import { prisma } from '@/lib/prisma'
+import { runExclusive } from '@/services/user-queue'
 
 import { BadRequestError } from '../_errors/bad-request-error'
 import { NotFoundError } from '../_errors/not-found-error'
@@ -30,32 +31,34 @@ export async function updateTransactionDescription(app: FastifyInstance) {
         const { id } = request.params
         const { description } = request.body
 
-        const tx = await prisma.transaction.findFirst({
-          select: { source: true, description: true, originalDescription: true },
-          where: { id, userId },
-        })
-        if (!tx) throw new NotFoundError('Transação não encontrada.')
+        await runExclusive(userId, async () => {
+          const tx = await prisma.transaction.findFirst({
+            select: { source: true, description: true, originalDescription: true },
+            where: { id, userId },
+          })
+          if (!tx) throw new NotFoundError('Transação não encontrada.')
 
-        // Nunca mexe em descriptionKey: recorrentes e categoria seguem o texto do banco.
-        if (description) {
-          await prisma.transaction.update({
-            where: { id },
-            data:
-              tx.source === 'MANUAL'
-                ? { description }
-                : {
-                    description,
-                    descriptionLocked: true,
-                    originalDescription: tx.originalDescription ?? tx.description,
-                  },
-          })
-        } else {
-          if (!tx.originalDescription) throw new BadRequestError('A descrição não pode ficar vazia.')
-          await prisma.transaction.update({
-            where: { id },
-            data: { description: tx.originalDescription, descriptionLocked: false, originalDescription: null },
-          })
-        }
+          // Nunca mexe em descriptionKey: recorrentes e categoria seguem o texto do banco.
+          if (description) {
+            await prisma.transaction.update({
+              where: { id },
+              data:
+                tx.source === 'MANUAL'
+                  ? { description }
+                  : {
+                      description,
+                      descriptionLocked: true,
+                      originalDescription: tx.originalDescription ?? tx.description,
+                    },
+            })
+          } else {
+            if (!tx.originalDescription) throw new BadRequestError('A descrição não pode ficar vazia.')
+            await prisma.transaction.update({
+              where: { id },
+              data: { description: tx.originalDescription, descriptionLocked: false, originalDescription: null },
+            })
+          }
+        })
         return reply.status(204).send(null)
       },
     )

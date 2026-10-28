@@ -70,7 +70,7 @@ function TransactionForm({
   const save = useMutation({
     mutationFn: async () => {
       const trimmed = description.trim()
-      if (trimmed !== transaction.description) {
+      if (trimmed !== transaction.description.trim()) {
         await setTransactionDescription(transaction.id, trimmed)
       }
       if (category && category !== (transaction.category ?? '')) {
@@ -80,14 +80,13 @@ function TransactionForm({
         await setTransactionNecessity(transaction.id, necessity)
       }
     },
-    onSuccess: async () => {
-      await Promise.all(
+    onSuccess: onClose,
+    onSettled: () =>
+      Promise.all(
         ['analysis', 'analysis-transactions', 'transactions', 'dashboard'].map(
           (key) => queryClient.invalidateQueries({ queryKey: [key] }),
         ),
-      )
-      onClose()
-    },
+      ),
     onError: () =>
       toast.error('Não foi possível salvar a transação. Tente novamente.'),
   })

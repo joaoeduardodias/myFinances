@@ -23,6 +23,7 @@ import { getRecurrences } from './recurrences/get-recurrences'
 import { updateRecurrence } from './recurrences/update-recurrence'
 import { getTransactions } from './transactions/get-transactions'
 import { updateTransactionCategory } from './transactions/update-transaction-category'
+import { updateTransactionDescription } from './transactions/update-transaction-description'
 import { updateTransactionTransfer } from './transactions/update-transaction-transfer'
 
 // Só o que sai do processo é simulado; o banco e as rotas são de verdade.
@@ -173,6 +174,7 @@ describe('isolamento entre usuários', () => {
       getAccounts,
       getTransactions,
       updateTransactionCategory,
+      updateTransactionDescription,
       updateTransactionTransfer,
       getRecurrences,
       updateRecurrence,
@@ -280,6 +282,12 @@ describe('isolamento entre usuários', () => {
         'transactions/:id/category',
         (i) => `/transactions/${i.transactionId}/category`,
         { category: 'Mercado' },
+      ],
+      [
+        'PATCH',
+        'transactions/:id/description',
+        (i) => `/transactions/${i.transactionId}/description`,
+        { description: 'Outro texto' },
       ],
       [
         'PATCH',

@@ -17,7 +17,7 @@ export async function updateTransactionNecessity(app: FastifyInstance) {
       {
         schema: {
           tags: ['Transactions'],
-          summary: 'Mark a debit as essential or avoidable (null clears the mark).',
+          summary: 'Mark a debit as essential, avoidable or emergency (null clears the mark).',
           operationId: 'updateTransactionNecessity',
           security: [{ bearerAuth: [] }],
           params: z.object({ id: z.uuid() }),

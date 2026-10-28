@@ -239,6 +239,23 @@ describe('AnalysisPage', () => {
     expect(setTransactionNecessity).not.toHaveBeenCalled()
   })
 
+  it('descrição com espaços nas pontas e só categoria alterada não chama a rota de descrição', async () => {
+    const user = userEvent.setup()
+    renderPage({ topExpenses: [{ ...gasto, description: '  Oficina  ' }] })
+    const table = await screen.findByRole('table', { name: 'Maiores gastos' })
+    await user.click(within(table).getByText('Oficina'))
+    const dialog = await screen.findByRole('dialog')
+    await user.selectOptions(
+      within(dialog).getByLabelText('Categoria'),
+      'Lazer',
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar' }))
+    await waitFor(() =>
+      expect(setTransactionCategory).toHaveBeenCalledWith('e1', 'Lazer'),
+    )
+    expect(setTransactionDescription).not.toHaveBeenCalled()
+  })
+
   it('marcar emergência pela janela', async () => {
     const user = userEvent.setup()
     renderPage({ topExpenses: [gasto] })
