@@ -38,6 +38,8 @@ import { deleteConnection } from './routes/connections/delete-connection'
 import { getConnections } from './routes/connections/get-connections'
 import { syncAll } from './routes/connections/sync-all'
 import { syncConnectionRoute } from './routes/connections/sync-connection'
+import { getAnalysis } from './routes/analysis/get-analysis'
+import { getAnalysisTransactions } from './routes/analysis/get-analysis-transactions'
 import { getDashboard } from './routes/dashboard/get-dashboard'
 import { health } from './routes/health/health'
 import { deletePayslip } from './routes/payslips/delete-payslip'
@@ -161,6 +163,8 @@ app.register(updateCategoryNecessity)
 app.register(getCards)
 app.register(updateCardCycle)
 app.register(getDashboard)
+app.register(getAnalysis)
+app.register(getAnalysisTransactions)
 app.register(uploadPayslip)
 app.register(getPayslips)
 app.register(getPayslip)
