@@ -7,6 +7,7 @@ import { CardDetail } from '@/pages/card-detail'
 import { Cards } from '@/pages/cards'
 import { Connections } from '@/pages/connections'
 import { Home } from '@/pages/home'
+import { Limits } from '@/pages/limits'
 import { Login } from '@/pages/login'
 import { PayslipDetail } from '@/pages/payslip-detail'
 import { Payslips } from '@/pages/payslips'
@@ -26,6 +27,7 @@ export const router = createBrowserRouter([
           { path: '/', element: <Home /> },
           { path: '/transacoes', element: <Transactions /> },
           { path: '/analise', element: <AnalysisPage /> },
+          { path: '/limites', element: <Limits /> },
           { path: '/cartoes', element: <Cards /> },
           { path: '/cartoes/:id', element: <CardDetail /> },
           { path: '/recorrentes', element: <Recurring /> },
