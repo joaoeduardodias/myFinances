@@ -10,8 +10,10 @@ import {
 } from '@/test/helpers'
 
 const prismaMock = makePrismaMock()
+const checkAlerts = vi.fn()
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
+vi.mock('@/services/check-alerts', () => ({ checkAlerts }))
 
 const { getTransactions } = await import('./get-transactions')
 const { updateTransactionCategory } = await import('./update-transaction-category')
@@ -644,6 +646,7 @@ describe('POST /transactions', () => {
     })
 
     expect(res.statusCode).toBe(201)
+    expect(checkAlerts).toHaveBeenCalledWith(userA, expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/))
     expect(res.json().transaction.date).toBe('2026-10-10')
     const data = prismaMock.transaction.create.mock.calls[0][0].data
     expect(data).toMatchObject({

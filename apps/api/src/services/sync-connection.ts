@@ -20,6 +20,7 @@ import type { PluggyAccount } from '@/lib/pluggy/types'
 import { prisma } from '@/lib/prisma'
 import { type IsoDate, todayIso } from '@/lib/today'
 
+import { checkAlerts } from './check-alerts'
 import { detectAndStoreRecurrences } from './detect-and-store-recurrences'
 import { removeTransactions } from './remove-transactions'
 import { runExclusive } from './user-queue'
@@ -97,6 +98,7 @@ async function runSync(
     await pairTransfers(userId, today, transferWindowDays)
     // Depois do pareamento: transferência não vira recorrente.
     await detectAndStoreRecurrences(userId, today)
+    await checkAlerts(userId, today)
 
     await prisma.connection.update({
       where: { id: connectionId },

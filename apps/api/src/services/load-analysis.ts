@@ -14,8 +14,7 @@ export function analysisMonths(today: IsoDate): string[] {
 }
 
 /** Transações da janela de 12 meses até hoje, a primeira data do usuário e as trocas de essencial/evitável. */
-export async function loadAnalysisInput(userId: string) {
-  const today = todayIso()
+export async function loadAnalysisInput(userId: string, today: IsoDate = todayIso()) {
   const from = `${analysisMonths(today)[0]}-01`
 
   const [rows, first, overrides] = await Promise.all([

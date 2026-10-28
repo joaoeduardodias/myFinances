@@ -4,7 +4,9 @@ import { descriptionKey } from '@/lib/finance/description-key'
 import { MATCH_WINDOW_DAYS, pickEntryMatch } from '@/lib/finance/match-entry'
 import type { EntryDraft } from '@/lib/gemini/interpret-entry'
 import { prisma } from '@/lib/prisma'
+import { todayIso } from '@/lib/today'
 import type { AccountType } from '@/prisma/generated/client'
+import { checkAlerts } from '@/services/check-alerts'
 import { runExclusive } from '@/services/user-queue'
 import { recomputeWalletBalance } from '@/services/wallet'
 
@@ -84,6 +86,7 @@ export function saveWhatsappEntry(
             ...category,
           },
         })
+        await checkAlerts(userId, todayIso())
         return { kind: 'renamed', accountName: account.name, accountType: account.type }
       }
 
@@ -107,6 +110,7 @@ export function saveWhatsappEntry(
     }
 
     if (account.type === 'WALLET') await recomputeWalletBalance(account.id)
+    await checkAlerts(userId, todayIso())
     return { kind: 'created', accountName: account.name, accountType: account.type }
   })
 }

@@ -4,10 +4,12 @@ import { makePrismaMock, resetPrismaMocks } from '@/test/helpers'
 
 const prismaMock = makePrismaMock()
 const recomputeWalletBalance = vi.fn()
+const checkAlerts = vi.fn()
 const runExclusive = vi.fn((_userId: string, task: () => Promise<unknown>) => task())
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/services/wallet', () => ({ recomputeWalletBalance }))
+vi.mock('@/services/check-alerts', () => ({ checkAlerts }))
 vi.mock('@/services/user-queue', () => ({ runExclusive }))
 
 const { saveWhatsappEntry, undoWhatsappEntry } = await import('./save-entry')
@@ -38,6 +40,7 @@ describe('saveWhatsappEntry', () => {
     resetPrismaMocks(prismaMock)
     recomputeWalletBalance.mockReset()
     runExclusive.mockClear()
+    checkAlerts.mockReset()
     prismaMock.account.findFirst.mockResolvedValue(nubank)
     prismaMock.transaction.findMany.mockResolvedValue([])
   })
@@ -166,6 +169,33 @@ describe('saveWhatsappEntry', () => {
   it('outro erro sobe', async () => {
     prismaMock.transaction.create.mockRejectedValue(new Error('boom'))
     await expect(saveWhatsappEntry('user-1', input)).rejects.toThrow('boom')
+  })
+})
+
+describe('saveWhatsappEntry: alarmes', () => {
+  beforeEach(() => {
+    resetPrismaMocks(prismaMock)
+    checkAlerts.mockReset()
+    prismaMock.account.findFirst.mockResolvedValue(nubank)
+    prismaMock.transaction.findMany.mockResolvedValue([])
+  })
+
+  it('confere ao criar', async () => {
+    await saveWhatsappEntry('user-1', input)
+    expect(checkAlerts).toHaveBeenCalledWith('user-1', expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/))
+  })
+
+  it('confere ao renomear', async () => {
+    prismaMock.transaction.findMany.mockResolvedValue([pluggyRow])
+    const result = await saveWhatsappEntry('user-1', input)
+    expect(result.kind).toBe('renamed')
+    expect(checkAlerts).toHaveBeenCalledTimes(1)
+  })
+
+  it('não confere no duplicado', async () => {
+    prismaMock.transaction.create.mockRejectedValue({ code: 'P2002' })
+    expect(await saveWhatsappEntry('user-1', input)).toEqual({ kind: 'duplicate' })
+    expect(checkAlerts).not.toHaveBeenCalled()
   })
 })
 

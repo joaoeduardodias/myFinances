@@ -11,8 +11,10 @@ import { makePrismaMock, resetPrismaMocks } from '@/test/helpers'
 const prismaMock = makePrismaMock()
 
 const detectAndStoreRecurrencesMock = vi.fn()
+const checkAlertsMock = vi.fn()
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
+vi.mock('@/services/check-alerts', () => ({ checkAlerts: checkAlertsMock }))
 vi.mock('./detect-and-store-recurrences', () => ({
   detectAndStoreRecurrences: detectAndStoreRecurrencesMock,
 }))
@@ -146,6 +148,7 @@ beforeEach(() => {
   prismaMock.transaction.deleteMany.mockResolvedValue({ count: 0 })
   prismaMock.transaction.delete.mockResolvedValue({})
   detectAndStoreRecurrencesMock.mockReset()
+  checkAlertsMock.mockReset()
   detectAndStoreRecurrencesMock.mockResolvedValue(0)
 })
 
@@ -176,6 +179,14 @@ describe('syncConnection', () => {
     expect(detectOrder).toBeLessThan(lastUpdateOrder)
     expect(prismaMock.connection.update.mock.calls.at(-1)?.[0].data.lastSyncedAt).toBeInstanceOf(
       Date,
+    )
+  })
+
+  it('confere os alarmes depois de detectar recorrentes', async () => {
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+    expect(checkAlertsMock).toHaveBeenCalledWith(USER, TODAY)
+    expect(checkAlertsMock.mock.invocationCallOrder[0]).toBeGreaterThan(
+      detectAndStoreRecurrencesMock.mock.invocationCallOrder[0],
     )
   })
 
