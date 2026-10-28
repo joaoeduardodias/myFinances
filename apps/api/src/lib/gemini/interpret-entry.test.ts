@@ -24,7 +24,7 @@ const base = {
   accountId: 'nubank-cc',
   candidateAccountIds: [],
   date: TODAY,
-  category: 'Alimentação',
+  category: 'Restaurante',
 }
 
 function geminiResponse(raw: object, status = 200) {
@@ -57,7 +57,7 @@ describe('interpretEntry', () => {
         amountCents: -4500,
         description: 'Almoço',
         date: TODAY,
-        category: 'Alimentação',
+        category: 'Restaurante',
       },
     })
   })

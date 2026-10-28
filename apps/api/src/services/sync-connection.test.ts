@@ -326,7 +326,7 @@ describe('syncConnection', () => {
       status: 'POSTED',
       source: 'PLUGGY',
       pluggyCategory: 'Food delivery',
-      category: 'Alimentação',
+      category: 'Delivery',
     })
   })
 
@@ -417,7 +417,7 @@ describe('syncConnection', () => {
     expect(call.update).not.toHaveProperty('descriptionKey')
     expect(call.update).toMatchObject({
       amountCents: -4290,
-      category: 'Alimentação',
+      category: 'Delivery',
       originalDescription: 'IFOOD *RESTAURANTE',
     })
   })
@@ -503,7 +503,7 @@ describe('syncConnection', () => {
       descriptionLocked: true,
       whatsappMessageId: 'wamid.1',
       originalDescription: 'PIX ENVIADO RESTAURANTE X',
-      category: 'Alimentação',
+      category: 'Delivery',
     })
     expect(prismaMock.transaction.create.mock.calls[0][0].data).not.toHaveProperty('categoryLocked')
     // Apaga antes de criar: `whatsappMessageId` é único.

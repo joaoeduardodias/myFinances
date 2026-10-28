@@ -33,7 +33,7 @@ function tx(over: Record<string, unknown> = {}) {
     date: '2026-10-20',
     description: 'Mercado',
     amountCents: -5000,
-    category: 'Alimentação',
+    category: 'Restaurante',
     isTransfer: false,
     source: 'PLUGGY',
     account: { name: 'Nubank', type: 'BANK' },
@@ -43,7 +43,7 @@ function tx(over: Record<string, unknown> = {}) {
 
 function renderPage(transactions = [tx()], totalPages = 1) {
   vi.mocked(listAccounts).mockResolvedValue([])
-  vi.mocked(listCategories).mockResolvedValue(['Alimentação', 'Transporte'])
+  vi.mocked(listCategories).mockResolvedValue(['Restaurante', 'Uber e táxi'])
   vi.mocked(listTransactions).mockResolvedValue({
     transactions,
     page: 1,
@@ -87,9 +87,9 @@ describe('Transactions', () => {
     const select = await screen.findByRole('combobox', {
       name: 'Categoria de Mercado',
     })
-    await user.selectOptions(select, 'Transporte')
+    await user.selectOptions(select, 'Uber e táxi')
     await waitFor(() =>
-      expect(setTransactionCategory).toHaveBeenCalledWith('t1', 'Transporte'),
+      expect(setTransactionCategory).toHaveBeenCalledWith('t1', 'Uber e táxi'),
     )
   })
 
@@ -152,14 +152,14 @@ describe('Transactions', () => {
     await user.type(within(dialog).getByLabelText('Valor (R$)'), '50,00')
     await user.selectOptions(
       within(dialog).getByLabelText('Categoria'),
-      'Alimentação',
+      'Restaurante',
     )
     await user.click(
       within(dialog).getByRole('button', { name: 'Lançar saída' }),
     )
     await waitFor(() =>
       expect(createManualTransaction).toHaveBeenCalledWith(
-        expect.objectContaining({ category: 'Alimentação' }),
+        expect.objectContaining({ category: 'Restaurante' }),
       ),
     )
   })

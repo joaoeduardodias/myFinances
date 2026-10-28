@@ -118,14 +118,14 @@ describe('PATCH /transactions/:id/category', () => {
     const res = await call(updateTransactionCategory, {
       method: 'PATCH',
       url: `/transactions/${txId}/category`,
-      body: { category: 'Alimentação' },
+      body: { category: 'Restaurante' },
     })
 
     expect(res.statusCode).toBe(204)
     expect(prismaMock.transaction.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: txId },
-        data: { category: 'Alimentação', categoryLocked: true },
+        data: { category: 'Restaurante', categoryLocked: true },
       }),
     )
     expect(prismaMock.categoryRule.upsert).toHaveBeenCalledWith(
@@ -135,7 +135,7 @@ describe('PATCH /transactions/:id/category', () => {
     )
     expect(prismaMock.transaction.updateMany).toHaveBeenCalledWith({
       where: { userId: userA, descriptionKey: 'ifood', categoryLocked: false },
-      data: { category: 'Alimentação' },
+      data: { category: 'Restaurante' },
     })
   })
 
@@ -262,7 +262,7 @@ describe('POST /transactions', () => {
       date: new Date('2026-10-10T00:00:00Z'),
       description: 'Padaria 123',
       amountCents: -1500,
-      category: 'Alimentação',
+      category: 'Restaurante',
       categoryLocked: true,
       isTransfer: false,
       source: 'MANUAL',
@@ -273,7 +273,7 @@ describe('POST /transactions', () => {
     const res = await call(createManualTransaction, {
       method: 'POST',
       url: '/transactions',
-      body: { date: '2026-10-10', description: 'Padaria 123', amountCents: -1500, category: 'Alimentação' },
+      body: { date: '2026-10-10', description: 'Padaria 123', amountCents: -1500, category: 'Restaurante' },
     })
 
     expect(res.statusCode).toBe(201)
@@ -286,7 +286,7 @@ describe('POST /transactions', () => {
       status: 'POSTED',
       descriptionKey: 'padaria',
       amountCents: -1500,
-      category: 'Alimentação',
+      category: 'Restaurante',
     })
     expect(data.date).toEqual(new Date('2026-10-10T00:00:00Z'))
     expect(prismaMock.account.update).toHaveBeenCalledWith({

@@ -7,13 +7,13 @@ const base = {
   amountCents: -4500,
   accountName: 'Conta Corrente Nubank',
   date: '2026-10-23',
-  category: 'Alimentação',
+  category: 'Restaurante',
 }
 
 describe('replies', () => {
   it('salvo', () => {
     expect(savedReply(base, '2026-10-23')).toBe(
-      '✅ Almoço · R$ 45,00 · débito · Conta Corrente Nubank · hoje · Alimentação\nResponda *desfazer* para apagar.',
+      '✅ Almoço · R$ 45,00 · débito · Conta Corrente Nubank · hoje · Restaurante\nResponda *desfazer* para apagar.',
     )
   })
 

@@ -16,7 +16,7 @@ const draft = {
   description: 'Almoço',
   amountCents: -3500,
   date: '2026-10-20',
-  category: 'Alimentação' as const,
+  category: 'Restaurante' as const,
 }
 const input = { draft, accountId: 'acc-1', messageId: 'wamid.1' }
 
@@ -91,7 +91,7 @@ describe('saveWhatsappEntry', () => {
         status: 'POSTED',
         source: 'MANUAL',
         whatsappMessageId: 'wamid.1',
-        category: 'Alimentação',
+        category: 'Restaurante',
         categoryLocked: true,
       },
     })
@@ -125,7 +125,7 @@ describe('saveWhatsappEntry', () => {
         descriptionKey: 'almoco',
         descriptionLocked: true,
         whatsappMessageId: 'wamid.1',
-        category: 'Alimentação',
+        category: 'Restaurante',
         categoryLocked: true,
       },
     })
