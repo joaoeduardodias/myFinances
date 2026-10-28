@@ -42,5 +42,7 @@ describe('DEFAULT_GROUP', () => {
     expect(DEFAULT_GROUP.Outros).toBe('unclassified')
     expect(isNecessityCategory('Lazer')).toBe(true)
     expect(isNecessityCategory('Salário')).toBe(false)
+    expect(DEFAULT_GROUP['Serviços']).toBe('essential')
+    expect(isNecessityCategory('Serviços')).toBe(true)
   })
 })

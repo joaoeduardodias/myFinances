@@ -50,7 +50,7 @@ export const DEFAULT_GROUP: Record<Category, CategoryGroup> = {
   Lazer: 'avoidable',
   Assinaturas: 'avoidable',
   Compras: 'avoidable',
-  'Serviços': 'unclassified',
+  'Serviços': 'essential',
   'Impostos e taxas': 'essential',
   'Dívidas e juros': 'debt',
   Investimentos: 'investment',
