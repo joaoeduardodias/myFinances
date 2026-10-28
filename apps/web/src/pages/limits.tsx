@@ -63,7 +63,10 @@ function LimitDialog({
   limit: CategoryLimit | null
   onOpenChange: (open: boolean) => void
 }) {
-  const [value, setValue] = useState('')
+  const [value, setValue] = useState(() => {
+    const initial = limit?.limitCents ?? limit?.proposedCents ?? null
+    return initial === null ? '' : (initial / 100).toFixed(2).replace('.', ',')
+  })
   const queryClient = useQueryClient()
   const save = useMutation({
     mutationFn: (cents: number) =>
@@ -237,7 +240,7 @@ export function Limits() {
     return (
       <>
         {l.status === 'DECLINED' ? (
-          <span className="text-muted-foreground text-sm">Recusado</span>
+          <span className="text-muted-foreground text-sm">Sem limite</span>
         ) : (
           <span className="text-muted-foreground text-sm">Sem histórico</span>
         )}
@@ -289,7 +292,9 @@ export function Limits() {
               <SortableHead column="proposal" sort={sort} onSort={onSort}>
                 Proposta
               </SortableHead>
-              <th className="w-0" />
+              <th className="w-0">
+                <span className="sr-only">Ações</span>
+              </th>
             </TableRow>
           </TableHeader>
           <TableBody>

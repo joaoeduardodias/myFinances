@@ -61,7 +61,7 @@ describe('NotificationsBell', () => {
   it('abrir o menu lista os avisos e marca como lidos uma vez', async () => {
     setup(2, [item({}), item({ id: 'n2', title: 'Lazer estourou' })])
     await screen.findByText('2')
-    await userEvent.click(screen.getByRole('button', { name: 'Avisos' }))
+    await userEvent.click(screen.getByRole('button', { name: /^Avisos/ }))
     expect(await screen.findByText('Mercado em 80%')).toBeInTheDocument()
     expect(screen.getByText('Lazer estourou')).toBeInTheDocument()
     await waitFor(() => expect(markNotificationsRead).toHaveBeenCalledTimes(1))
@@ -70,14 +70,26 @@ describe('NotificationsBell', () => {
   it('não marca como lidos com 0 não lidos', async () => {
     setup(0, [item({ read: true })])
     await waitFor(() => expect(getNotifications).toHaveBeenCalled())
-    await userEvent.click(screen.getByRole('button', { name: 'Avisos' }))
+    await userEvent.click(screen.getByRole('button', { name: /^Avisos/ }))
     expect(await screen.findByText('Mercado em 80%')).toBeInTheDocument()
     expect(markNotificationsRead).not.toHaveBeenCalled()
   })
 
+  it('o nome acessível traz a contagem de não lidos', async () => {
+    setup(3, [item({})])
+    expect(
+      await screen.findByRole('button', { name: 'Avisos (3 não lidos)' }),
+    ).toBeInTheDocument()
+  })
+
+  it('o nome acessível é só Avisos com 0 não lidos', async () => {
+    setup(0, [])
+    expect(screen.getByRole('button', { name: 'Avisos' })).toBeInTheDocument()
+  })
+
   it('lista vazia mostra mensagem', async () => {
     setup(0, [])
-    await userEvent.click(screen.getByRole('button', { name: 'Avisos' }))
+    await userEvent.click(screen.getByRole('button', { name: /^Avisos/ }))
     expect(await screen.findByText('Nenhum aviso.')).toBeInTheDocument()
   })
 })

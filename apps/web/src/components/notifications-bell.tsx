@@ -37,7 +37,9 @@ export function NotificationsBell() {
         <Button
           variant="ghost"
           size="icon"
-          aria-label="Avisos"
+          aria-label={
+            unreadCount > 0 ? `Avisos (${unreadCount} não lidos)` : 'Avisos'
+          }
           className="relative"
         >
           <BellIcon className="size-4" />

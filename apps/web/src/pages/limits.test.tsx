@@ -106,7 +106,7 @@ describe('Limits', () => {
   it('shows texts for rows without proposal and declined', async () => {
     renderPage()
     expect(await screen.findByText('Sem histórico')).toBeInTheDocument()
-    expect(screen.getByText('Recusado')).toBeInTheDocument()
+    expect(screen.getByText('Sem limite')).toBeInTheDocument()
   })
 
   it('saves the amount typed in the dialog', async () => {
@@ -115,11 +115,40 @@ describe('Limits', () => {
     await user.click(
       await screen.findByRole('button', { name: 'Ajustar Saúde' }),
     )
-    await user.type(screen.getByLabelText('Limite (R$)'), '12,50')
+    const input = screen.getByLabelText('Limite (R$)')
+    await user.clear(input)
+    await user.type(input, '12,50')
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
     await waitFor(() =>
       expect(setCategoryLimit).toHaveBeenCalledWith('Saúde', 1250),
     )
+  })
+
+  it('prefills the dialog with the current limit or the proposal', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(
+      await screen.findByRole('button', { name: 'Ajustar Saúde' }),
+    )
+    expect(screen.getByLabelText('Limite (R$)')).toHaveValue('400,00')
+  })
+
+  it('prefills the dialog with the proposal on a new row', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(
+      await screen.findByRole('button', { name: 'Ajustar Mercado' }),
+    )
+    expect(screen.getByLabelText('Limite (R$)')).toHaveValue('800,00')
+  })
+
+  it('leaves the dialog empty without limit or proposal', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(
+      await screen.findByRole('button', { name: 'Definir Viagem' }),
+    )
+    expect(screen.getByLabelText('Limite (R$)')).toHaveValue('')
   })
 
   it('disables save for an invalid amount', async () => {
