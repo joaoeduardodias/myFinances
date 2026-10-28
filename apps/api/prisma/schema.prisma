@@ -25,6 +25,7 @@ model User {
   categoryRules CategoryRule[]
   recurrences   Recurrence[]
   payslips      Payslip[]
+  categoryNecessities CategoryNecessity[]
 
   @@map("users")
 }
@@ -169,6 +170,8 @@ model Transaction {
   originalDescription String?           @map("original_description")
   isTransfer          Boolean           @default(false) @map("is_transfer")
   transferLocked      Boolean           @default(false) @map("transfer_locked")
+  // Marca do João sobre este gasto; sem marca vale a da categoria.
+  necessity           Necessity?
   transferPairId      String?           @unique @map("transfer_pair_id")
   transferPair        Transaction?      @relation("TransferPair", fields: [transferPairId], references: [id], onDelete: SetNull)
   transferPairOf      Transaction?      @relation("TransferPair")
@@ -258,4 +261,21 @@ model PayslipLine {
   position    Int
 
   @@map("payslip_lines")
+}
+
+enum Necessity {
+  ESSENTIAL
+  AVOIDABLE
+}
+
+/// Troca do João sobre o padrão essencial/evitável de uma categoria.
+model CategoryNecessity {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category  String
+  necessity Necessity
+
+  @@unique([userId, category])
+  @@map("category_necessities")
 }

@@ -15,6 +15,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 
 const { getTransactions } = await import('./get-transactions')
 const { updateTransactionCategory } = await import('./update-transaction-category')
+const { updateTransactionNecessity } = await import('./update-transaction-necessity')
 const { updateTransactionTransfer } = await import('./update-transaction-transfer')
 const { createManualTransaction } = await import('./create-manual-transaction')
 const { deleteManualTransaction } = await import('./delete-manual-transaction')
@@ -174,6 +175,68 @@ describe('PATCH /transactions/:id/category', () => {
       id: txId,
       userId: userB,
     })
+  })
+})
+
+describe('PATCH /transactions/:id/necessity', () => {
+  const url = `/transactions/${txId}/necessity`
+
+  it('grava a marca num débito do usuário', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue({ id: txId, amountCents: -4500, isTransfer: false })
+    const res = await call(updateTransactionNecessity, {
+      method: 'PATCH',
+      url,
+      body: { necessity: 'AVOIDABLE' },
+    })
+    expect(res.statusCode).toBe(204)
+    expect(prismaMock.transaction.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: txId, userId: userA } }),
+    )
+    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+      where: { id: txId },
+      data: { necessity: 'AVOIDABLE' },
+    })
+  })
+
+  it('null tira a marca', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue({ id: txId, amountCents: -4500, isTransfer: false })
+    const res = await call(updateTransactionNecessity, { method: 'PATCH', url, body: { necessity: null } })
+    expect(res.statusCode).toBe(204)
+    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+      where: { id: txId },
+      data: { necessity: null },
+    })
+  })
+
+  it('transação de outro usuário dá 404', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue(null)
+    const res = await call(updateTransactionNecessity, {
+      method: 'PATCH',
+      url,
+      body: { necessity: 'ESSENTIAL' },
+      user: userB,
+    })
+    expect(res.statusCode).toBe(404)
+    expect(prismaMock.transaction.update).not.toHaveBeenCalled()
+  })
+
+  it('crédito ou transferência dá 400', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValueOnce({ id: txId, amountCents: 5000, isTransfer: false })
+    const credit = await call(updateTransactionNecessity, {
+      method: 'PATCH',
+      url,
+      body: { necessity: 'ESSENTIAL' },
+    })
+    expect(credit.statusCode).toBe(400)
+
+    prismaMock.transaction.findFirst.mockResolvedValueOnce({ id: txId, amountCents: -5000, isTransfer: true })
+    const transfer = await call(updateTransactionNecessity, {
+      method: 'PATCH',
+      url,
+      body: { necessity: 'ESSENTIAL' },
+    })
+    expect(transfer.statusCode).toBe(400)
+    expect(prismaMock.transaction.update).not.toHaveBeenCalled()
   })
 })
 

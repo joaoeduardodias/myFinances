@@ -30,6 +30,8 @@ import { refreshSession } from './routes/auth/refresh-session'
 import { getCards } from './routes/cards/get-cards'
 import { updateCardCycle } from './routes/cards/update-card-cycle'
 import { getCategories } from './routes/categories/get-categories'
+import { getCategoryNecessities } from './routes/categories/get-category-necessities'
+import { updateCategoryNecessity } from './routes/categories/update-category-necessity'
 import { createConnectToken } from './routes/connections/create-connect-token'
 import { createConnection } from './routes/connections/create-connection'
 import { deleteConnection } from './routes/connections/delete-connection'
@@ -52,6 +54,7 @@ import { createManualTransaction } from './routes/transactions/create-manual-tra
 import { deleteManualTransaction } from './routes/transactions/delete-manual-transaction'
 import { getTransactions } from './routes/transactions/get-transactions'
 import { updateTransactionCategory } from './routes/transactions/update-transaction-category'
+import { updateTransactionNecessity } from './routes/transactions/update-transaction-necessity'
 import { updateTransactionTransfer } from './routes/transactions/update-transaction-transfer'
 import { registerPluggyWebhook } from './routes/webhooks/pluggy-webhook'
 import { registerWhatsappWebhook } from './routes/webhooks/whatsapp-webhook'
@@ -148,10 +151,13 @@ app.register(updateRecurrence)
 app.register(dismissRecurrence)
 app.register(getTransactions)
 app.register(updateTransactionCategory)
+app.register(updateTransactionNecessity)
 app.register(updateTransactionTransfer)
 app.register(createManualTransaction)
 app.register(deleteManualTransaction)
 app.register(getCategories)
+app.register(getCategoryNecessities)
+app.register(updateCategoryNecessity)
 app.register(getCards)
 app.register(updateCardCycle)
 app.register(getDashboard)
