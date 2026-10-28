@@ -59,7 +59,8 @@ export async function getCategoryLimits(app: FastifyInstance) {
         const byCategory = new Map(rows.map((r) => [r.category, r]))
 
         const limits = LIMIT_CATEGORIES.map((category) => {
-          const spentCents = spend.get(month)?.get(category) ?? 0
+          // Estorno sem compra no mês deixaria o gasto negativo.
+          const spentCents = Math.max(0, spend.get(month)?.get(category) ?? 0)
           const row = byCategory.get(category)
 
           if (!row) {
@@ -76,7 +77,12 @@ export async function getCategoryLimits(app: FastifyInstance) {
           }
 
           let proposedCents: number | null = null
-          if (row.reviewedMonth !== month && needsRevision(row.limitCents, history(category, REVISION_MONTHS))) {
+          // Só contam meses em que o limite já valia (reviewedMonth vem de todo PUT).
+          const since = row.reviewedMonth
+          const revisionHistory = closedMonths(today, REVISION_MONTHS, input.firstDate)
+            .filter((m) => !since || m >= since)
+            .map((m) => spend.get(m)?.get(category) ?? 0)
+          if (row.reviewedMonth !== month && needsRevision(row.limitCents, revisionHistory)) {
             const proposal = proposeLimit(history(category, PROPOSAL_MONTHS))
             if (proposal !== null && proposal !== row.limitCents) proposedCents = proposal
           }

@@ -103,6 +103,24 @@ describe('GET /category-limits', () => {
     expect(mercado).toMatchObject({ status: 'ACTIVE', limitCents: 10_000, proposedCents: 50_000 })
   })
 
+  it('revisão só olha meses em que o limite já valia', async () => {
+    seed([{ category: 'Mercado', status: 'ACTIVE', limitCents: 10_000, reviewedMonth: monthsAgo(1).toISOString().slice(0, 7) }])
+    const res = await call(getCategoryLimits, { method: 'GET', url: '/category-limits' })
+    const mercado = res.json().limits.find((l: { category: string }) => l.category === 'Mercado')
+    expect(mercado).toMatchObject({ status: 'ACTIVE', limitCents: 10_000, proposedCents: null })
+  })
+
+  it('gasto do mês nunca fica negativo', async () => {
+    prismaMock.transaction.findMany.mockResolvedValue([
+      { ...spend(0, 'Mercado', 5_000), amountCents: 5_000, id: 'estorno' },
+    ])
+    prismaMock.transaction.findFirst.mockResolvedValue({ date: monthsAgo(1) })
+    prismaMock.categoryLimit.findMany.mockResolvedValue([])
+    const res = await call(getCategoryLimits, { method: 'GET', url: '/category-limits' })
+    const mercado = res.json().limits.find((l: { category: string }) => l.category === 'Mercado')
+    expect(mercado.spentCents).toBe(0)
+  })
+
   it('DECLINED não tem limite nem proposta', async () => {
     seed([{ category: 'Mercado', status: 'DECLINED', limitCents: null, reviewedMonth: null }])
     const res = await call(getCategoryLimits, { method: 'GET', url: '/category-limits' })

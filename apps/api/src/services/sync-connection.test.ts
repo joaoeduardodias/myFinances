@@ -14,7 +14,13 @@ const detectAndStoreRecurrencesMock = vi.fn()
 const checkAlertsMock = vi.fn()
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
-vi.mock('@/services/check-alerts', () => ({ checkAlerts: checkAlertsMock }))
+vi.mock('@/services/check-alerts', () => ({
+  checkAlertsSafely: async (...args: unknown[]) => {
+    try {
+      await checkAlertsMock(...args)
+    } catch {}
+  },
+}))
 vi.mock('./detect-and-store-recurrences', () => ({
   detectAndStoreRecurrences: detectAndStoreRecurrencesMock,
 }))
@@ -188,6 +194,14 @@ describe('syncConnection', () => {
     expect(checkAlertsMock.mock.invocationCallOrder[0]).toBeGreaterThan(
       detectAndStoreRecurrencesMock.mock.invocationCallOrder[0],
     )
+  })
+
+  it('falha no alarme não impede a sincronização', async () => {
+    checkAlertsMock.mockRejectedValue(new Error('alarme'))
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+    const data = prismaMock.connection.update.mock.calls.at(-1)?.[0].data
+    expect(data.lastSyncedAt).toBeInstanceOf(Date)
+    expect(data.lastError).toBeFalsy()
   })
 
   it('na primeira sincronização busca desde today − 365', async () => {

@@ -65,3 +65,12 @@ export async function checkAlerts(userId: string, today: IsoDate): Promise<void>
     await prisma.user.update({ where: { id: userId }, data: { spendableNegative: negative } })
   }
 }
+
+/** Alarme é acessório: falhar aqui nunca pode desfazer o que o chamador já gravou. */
+export async function checkAlertsSafely(userId: string, today: IsoDate): Promise<void> {
+  try {
+    await checkAlerts(userId, today)
+  } catch (error) {
+    console.error('Falha ao avaliar alarmes', error)
+  }
+}

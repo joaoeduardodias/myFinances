@@ -8,7 +8,7 @@ import { CATEGORIES } from '@/lib/finance/categories'
 import { descriptionKey } from '@/lib/finance/description-key'
 import { prisma } from '@/lib/prisma'
 import { todayIso } from '@/lib/today'
-import { checkAlerts } from '@/services/check-alerts'
+import { checkAlertsSafely } from '@/services/check-alerts'
 import { runExclusive } from '@/services/user-queue'
 import { ensureWalletAccount, recomputeWalletBalance } from '@/services/wallet'
 
@@ -60,7 +60,8 @@ export async function createManualTransaction(app: FastifyInstance) {
           },
         })
         await recomputeWalletBalance(wallet.id)
-        await runExclusive(userId, () => checkAlerts(userId, todayIso()))
+        // Sem await: a resposta não espera um sync em andamento.
+        void runExclusive(userId, () => checkAlertsSafely(userId, todayIso()))
 
         return reply.status(201).send({ transaction: serializeTransaction(transaction) })
       },

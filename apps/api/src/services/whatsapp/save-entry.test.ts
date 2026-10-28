@@ -9,7 +9,13 @@ const runExclusive = vi.fn((_userId: string, task: () => Promise<unknown>) => ta
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/services/wallet', () => ({ recomputeWalletBalance }))
-vi.mock('@/services/check-alerts', () => ({ checkAlerts }))
+vi.mock('@/services/check-alerts', () => ({
+  checkAlertsSafely: async (...args: unknown[]) => {
+    try {
+      await checkAlerts(...args)
+    } catch {}
+  },
+}))
 vi.mock('@/services/user-queue', () => ({ runExclusive }))
 
 const { saveWhatsappEntry, undoWhatsappEntry } = await import('./save-entry')
@@ -190,6 +196,13 @@ describe('saveWhatsappEntry: alarmes', () => {
     const result = await saveWhatsappEntry('user-1', input)
     expect(result.kind).toBe('renamed')
     expect(checkAlerts).toHaveBeenCalledTimes(1)
+  })
+
+  it('falha no alarme não derruba o lançamento', async () => {
+    checkAlerts.mockRejectedValue(new Error('alarme'))
+    expect((await saveWhatsappEntry('user-1', input)).kind).toBe('created')
+    prismaMock.transaction.findMany.mockResolvedValue([pluggyRow])
+    expect((await saveWhatsappEntry('user-1', input)).kind).toBe('renamed')
   })
 
   it('não confere no duplicado', async () => {

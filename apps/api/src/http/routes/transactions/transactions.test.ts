@@ -13,7 +13,13 @@ const prismaMock = makePrismaMock()
 const checkAlerts = vi.fn()
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
-vi.mock('@/services/check-alerts', () => ({ checkAlerts }))
+vi.mock('@/services/check-alerts', () => ({
+  checkAlertsSafely: async (...args: unknown[]) => {
+    try {
+      await checkAlerts(...args)
+    } catch {}
+  },
+}))
 
 const { getTransactions } = await import('./get-transactions')
 const { updateTransactionCategory } = await import('./update-transaction-category')
@@ -623,6 +629,39 @@ describe('PATCH /transactions/:id/transfer', () => {
 })
 
 describe('POST /transactions', () => {
+  function seedCreate() {
+    prismaMock.account.findFirst.mockResolvedValue({ id: walletId })
+    prismaMock.transaction.create.mockResolvedValue({
+      id: txId,
+      accountId: walletId,
+      date: new Date('2026-10-10T00:00:00Z'),
+      description: 'Padaria 123',
+      amountCents: -1500,
+      category: null,
+      necessity: null,
+      categoryLocked: false,
+      isTransfer: false,
+      source: 'MANUAL',
+      account: { name: 'Carteira', type: 'WALLET' },
+    })
+    prismaMock.transaction.aggregate.mockResolvedValue({ _sum: { amountCents: -1500 } })
+  }
+  const body = { date: '2026-10-10', description: 'Padaria 123', amountCents: -1500 }
+
+  it('falha no alarme não derruba a criação', async () => {
+    seedCreate()
+    checkAlerts.mockRejectedValueOnce(new Error('alarme'))
+    const res = await call(createManualTransaction, { method: 'POST', url: '/transactions', body, user: userB })
+    expect(res.statusCode).toBe(201)
+  })
+
+  it('responde 201 sem esperar o alarme nem a fila', async () => {
+    seedCreate()
+    checkAlerts.mockReturnValueOnce(new Promise(() => {}))
+    const res = await call(createManualTransaction, { method: 'POST', url: '/transactions', body, user: userB })
+    expect(res.statusCode).toBe(201)
+  })
+
   it('cria na Carteira como MANUAL e recalcula o saldo', async () => {
     prismaMock.account.findFirst.mockResolvedValue({ id: walletId })
     prismaMock.transaction.create.mockResolvedValue({
