@@ -9,8 +9,10 @@ import {
   type Analysis,
   type AnalysisTransaction,
   getAnalysis,
+  getTransactionSimilar,
   listAnalysisTransactions,
   listCategoryNecessities,
+  saveTransactionRecurrence,
   setCategoryNecessity,
   setTransactionDescription,
   setTransactionNecessity,
@@ -24,6 +26,8 @@ vi.mock('@/http/analysis', () => ({
   listAnalysisTransactions: vi.fn(),
   setTransactionNecessity: vi.fn(),
   setTransactionDescription: vi.fn(),
+  getTransactionSimilar: vi.fn(),
+  saveTransactionRecurrence: vi.fn(),
   listCategoryNecessities: vi.fn(),
   setCategoryNecessity: vi.fn(),
 }))
@@ -162,6 +166,12 @@ describe('AnalysisPage', () => {
     vi.mocked(listCategories).mockResolvedValue(['Mercado', 'Lazer'])
     vi.mocked(setTransactionNecessity).mockResolvedValue(undefined)
     vi.mocked(setTransactionDescription).mockResolvedValue(undefined)
+    vi.mocked(saveTransactionRecurrence).mockResolvedValue(undefined)
+    vi.mocked(getTransactionSimilar).mockResolvedValue({
+      similar: 0,
+      canSaveRecurrence: false,
+      recurrenceStatus: null,
+    })
     vi.mocked(setTransactionCategory).mockResolvedValue(undefined)
     vi.mocked(setCategoryNecessity).mockResolvedValue(undefined)
     vi.mocked(listCategoryNecessities).mockResolvedValue([
@@ -217,6 +227,7 @@ describe('AnalysisPage', () => {
       expect(setTransactionDescription).toHaveBeenCalledWith(
         'e1',
         'Conserto do carro',
+        false,
       ),
     )
     expect(setTransactionCategory).toHaveBeenCalledWith('e1', 'Lazer')
@@ -285,6 +296,66 @@ describe('AnalysisPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Salvar' }))
     await waitFor(() => expect(setTransactionDescription).toHaveBeenCalled())
     expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('renomear as parecidas e salvar como recorrente', async () => {
+    vi.mocked(getTransactionSimilar).mockResolvedValue({
+      similar: 23,
+      canSaveRecurrence: true,
+      recurrenceStatus: null,
+    })
+    const user = userEvent.setup()
+    renderPage({ topExpenses: [gasto] })
+    const table = await screen.findByRole('table', { name: 'Maiores gastos' })
+    await user.click(within(table).getByText('Oficina'))
+    const dialog = await screen.findByRole('dialog')
+    const recurrence = await within(dialog).findByLabelText(
+      'Salvar como recorrente',
+    )
+    // A pergunta só aparece depois de mudar a descrição.
+    expect(within(dialog).queryByLabelText(/parecidas/)).toBeNull()
+    const desc = within(dialog).getByLabelText('Descrição')
+    await user.clear(desc)
+    await user.type(desc, 'Parcela do carro')
+    await user.click(
+      within(dialog).getByLabelText(
+        'Aplicar também às outras 23 parecidas e às próximas',
+      ),
+    )
+    await user.click(recurrence)
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar' }))
+    await waitFor(() =>
+      expect(saveTransactionRecurrence).toHaveBeenCalledWith('e1'),
+    )
+    expect(setTransactionDescription).toHaveBeenCalledWith(
+      'e1',
+      'Parcela do carro',
+      true,
+    )
+    expect(
+      vi.mocked(setTransactionDescription).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      vi.mocked(saveTransactionRecurrence).mock.invocationCallOrder[0],
+    )
+  })
+
+  it('já recorrente aparece marcado e não chama a rota de novo', async () => {
+    vi.mocked(getTransactionSimilar).mockResolvedValue({
+      similar: 0,
+      canSaveRecurrence: true,
+      recurrenceStatus: 'CONFIRMED',
+    })
+    const user = userEvent.setup()
+    renderPage({ topExpenses: [gasto] })
+    const table = await screen.findByRole('table', { name: 'Maiores gastos' })
+    await user.click(within(table).getByText('Oficina'))
+    const dialog = await screen.findByRole('dialog')
+    const box = await within(dialog).findByLabelText('Já está nos recorrentes')
+    expect(box).toBeChecked()
+    expect(box).toBeDisabled()
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(saveTransactionRecurrence).not.toHaveBeenCalled()
   })
 
   it('dava pra evitar abre a mesma janela', async () => {

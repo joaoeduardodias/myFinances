@@ -87,11 +87,29 @@ export async function setTransactionNecessity(
   await api.patch(`transactions/${id}/necessity`, { json: { necessity } })
 }
 
+/** Com `applyToSimilar`, vale para as parecidas (mesmo texto do banco) e para as próximas. */
 export async function setTransactionDescription(
   id: string,
   description: string,
+  applyToSimilar: boolean,
 ) {
-  await api.patch(`transactions/${id}/description`, { json: { description } })
+  await api.patch(`transactions/${id}/description`, {
+    json: { description, applyToSimilar },
+  })
+}
+
+export interface TransactionSimilar {
+  similar: number
+  canSaveRecurrence: boolean
+  recurrenceStatus: 'SUGGESTED' | 'CONFIRMED' | 'DISMISSED' | null
+}
+
+export async function getTransactionSimilar(id: string) {
+  return api.get(`transactions/${id}/similar`).json<TransactionSimilar>()
+}
+
+export async function saveTransactionRecurrence(id: string) {
+  await api.post(`transactions/${id}/recurrence`)
 }
 
 export async function listCategoryNecessities() {
