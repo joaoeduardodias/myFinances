@@ -39,4 +39,5 @@ Monorepo pnpm + Turborepo: `apps/api` (Fastify + Prisma) e `apps/web` (Vite + Re
 - Lançamento do WhatsApp fica fora de pareamento e recorrentes até a Pluggy trazer a transação; ela o substitui mantendo a descrição do João.
 - Conta ambígua no WhatsApp: o bot pergunta (decisão do João); responder só o banco ("caixa") vale a conta corrente. Poupança só quando a mensagem falar nela; "débito" lista só as contas do banco, sem cartão nem Carteira. "Desfazer" apaga o lançamento; se a Pluggy já o trouxe, volta o texto do banco.
 - Análise: crédito com categoria de gasto abate a categoria (estorno, devolução); marca na mão vale para o débito e sobrevive à troca de categoria; Dívidas e Investimentos fora de essencial/evitável (decisão do João).
+- Renomear pode valer para as parecidas (mesmo texto do banco) e as próximas só se o João marcar na janela; apagar a descrição desfaz a regra. "Salvar como recorrente" confirma até recorrente descartado (decisão do João).
 - Emergência é só marca manual da transação (decisão do João), grupo próprio na Análise e fora de 'Dava pra evitar'; descrição editada trava contra o sync e a regra de categoria segue o texto do banco.
