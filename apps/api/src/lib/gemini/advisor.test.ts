@@ -15,6 +15,7 @@ const PACK: AdvisorPack = {
   limitsKept: null,
   indicators: { months: [], incomeTrend: null, risingCategories: [] },
   goals: [],
+  historyStartMonth: null,
 }
 
 function run(raw: object) {

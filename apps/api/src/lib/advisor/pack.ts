@@ -41,6 +41,8 @@ export type AdvisorPack = {
   /** Limites respeitados no último mês fechado; `null` sem limite ativo. */
   limitsKept: { month: string; kept: number; total: number } | null
   indicators: AdvisorIndicators
+  /** Primeiro mês completo da conta que recebe a renda; antes dele `months` não tem a renda. */
+  historyStartMonth: string | null
   /** Metas ativas com o andamento desde o mês em que foram aceitas. */
   goals: { target: GoalTarget; startMonth: string; months: GoalMonth[] }[]
 }
@@ -64,11 +66,16 @@ export function buildAdvisorPack(input: {
   spend: Map<string, Map<string, number>>
   limits: { category: string; limitCents: number }[]
   goals?: { target: GoalTarget; startMonth: string }[]
+  historyStartMonth?: string | null
 }): AdvisorPack {
   const { today, projection, spend, limits } = input
   // Meses antes do primeiro dado leriam como gasto zero para o Gemini.
   const first = input.months.findIndex((m) => hasData(m, spend))
-  const months = first < 0 ? input.months.slice(-1) : input.months.slice(first)
+  const withData = first < 0 ? input.months.slice(-1) : input.months.slice(first)
+  // Sem a conta da renda, o mês leria como gasto maior que a renda.
+  const historyStartMonth = input.historyStartMonth ?? null
+  const covered = historyStartMonth ? withData.filter((m) => m.month >= historyStartMonth) : withData
+  const months = covered.length > 0 ? covered : input.months.slice(-1)
   const currentMonth = today.slice(0, 7)
   const limitByCategory = new Map(limits.map((l) => [l.category, l.limitCents]))
 
@@ -116,12 +123,28 @@ export function buildAdvisorPack(input: {
     })),
     categoryHistory,
     limitsKept,
+    historyStartMonth:
+      historyStartMonth && input.months.some((m) => m.month < historyStartMonth) ? historyStartMonth : null,
     indicators: advisorIndicators(months, spend, currentMonth),
     goals: (input.goals ?? []).map((goal) => ({
       ...goal,
       months: goalProgress(goal.target, goal.startMonth, { months: input.months, spend, currentMonth }),
     })),
   }
+}
+
+/**
+ * Primeiro mês inteiro coberto por todas as contas que recebem renda, a partir
+ * da primeira transação de cada uma (a Pluggy traz histórico curto de alguns
+ * bancos). `null` sem conta de renda.
+ */
+export function fullHistoryStart(firstDates: IsoDate[]): string | null {
+  if (firstDates.length === 0) return null
+  const latest = firstDates.reduce((a, b) => (a > b ? a : b))
+  if (latest.slice(8, 10) === '01') return latest.slice(0, 7)
+  const year = Number(latest.slice(0, 4))
+  const month = Number(latest.slice(5, 7))
+  return month === 12 ? `${year + 1}-01` : `${year}-${String(month + 1).padStart(2, '0')}`
 }
 
 /** Pacote vazio: sem gasto, sem limite e sem renda configurada. */
@@ -199,6 +222,11 @@ export function packPrompt(pack: AdvisorPack): string {
     lines.push(`Limites respeitados em ${monthName(pack.limitsKept.month)}: ${pack.limitsKept.kept} de ${pack.limitsKept.total}.`)
   }
 
+  if (pack.historyStartMonth) {
+    lines.push(
+      `Histórico completo só desde ${monthName(pack.historyStartMonth)}: antes disso falta a conta que recebe a renda.`,
+    )
+  }
   lines.push('Meses (renda, essencial, evitável, emergência, dívida, investido; sobra e essencial em % da renda):')
   pack.months.forEach((m, i) => {
     const ind = pack.indicators.months[i]

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { AnalysisMonth } from '@/lib/finance/annual-analysis'
 import type { Projection } from '@/lib/finance/projection'
 
-import { buildAdvisorPack, isEmptyPack, packPrompt } from './pack'
+import { buildAdvisorPack, fullHistoryStart, isEmptyPack, packPrompt } from './pack'
 
 const today = '2026-10-15'
 
@@ -88,6 +88,20 @@ describe('buildAdvisorPack', () => {
     expect(text).not.toMatch(/\d{4}-\d{2}/)
   })
 
+  it('começa no mês em que a conta da renda já tinha dados e avisa no prompt', () => {
+    const short = buildAdvisorPack({ today, projection, months, spend, limits, historyStartMonth: '2026-09' })
+    expect(short.months.map((m) => m.month)).toEqual(['2026-09', '2026-10'])
+    expect(packPrompt(short)).toContain(
+      'Histórico completo só desde setembro de 2026: antes disso falta a conta que recebe a renda.',
+    )
+    expect(packPrompt(pack)).not.toContain('Histórico completo')
+  })
+
+  it('início depois do mês atual deixa só o mês atual', () => {
+    const none = buildAdvisorPack({ today, projection, months, spend, limits, historyStartMonth: '2026-11' })
+    expect(none.months.map((m) => m.month)).toEqual(['2026-10'])
+  })
+
   it('prompt traz o investido de cada mês', () => {
     const withInvested = months.map((m) => (m.month === '2026-09' ? { ...m, investedCents: 70000 } : m))
     const text = packPrompt(buildAdvisorPack({ today, projection, months: withInvested, spend, limits }))
@@ -162,5 +176,23 @@ describe('isEmptyPack', () => {
       limits: [],
     })
     expect(isEmptyPack(pack)).toBe(false)
+  })
+})
+
+describe('fullHistoryStart', () => {
+  it('primeiro mês completo depois da conta de renda mais nova', () => {
+    expect(fullHistoryStart(['2025-10-23', '2026-09-23'])).toBe('2026-10')
+  })
+
+  it('conta que começa no dia 1 vale o próprio mês', () => {
+    expect(fullHistoryStart(['2026-09-01'])).toBe('2026-09')
+  })
+
+  it('sem conta de renda não corta nada', () => {
+    expect(fullHistoryStart([])).toBeNull()
+  })
+
+  it('dezembro passa para janeiro', () => {
+    expect(fullHistoryStart(['2025-12-10'])).toBe('2026-01')
   })
 })
