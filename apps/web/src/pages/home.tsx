@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { BanksOverview, CardsOverview } from '@/components/accounts-overview'
+import { AdvisorCard } from '@/components/advisor-card'
 import { FlowChart, FlowSummary } from '@/components/monthly-flow'
 import { PayablesOverview } from '@/components/payables-overview'
 import { Button } from '@/components/ui/button'
@@ -101,6 +102,7 @@ function DashboardContent({ data }: { data: Dashboard }) {
       </aside>
 
       <div className="flex min-w-0 flex-col gap-4 xl:order-1 xl:gap-6">
+        <AdvisorCard today={data.today} />
         <FlowSummary flow={data.flow} />
         <FlowChart flow={data.flow} />
       </div>

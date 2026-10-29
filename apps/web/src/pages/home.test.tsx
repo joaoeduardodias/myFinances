@@ -12,6 +12,10 @@ vi.mock('@/http/dashboard', () => ({
   getDashboard: vi.fn(),
   syncAll: vi.fn(),
 }))
+vi.mock('@/http/advisor', () => ({
+  getAdvisor: vi.fn(() => new Promise(() => {})),
+  askAdvisor: vi.fn(),
+}))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 
 const base: Dashboard = {
