@@ -7,8 +7,8 @@ import {
   interpretEntry,
 } from '@/lib/gemini/interpret-entry'
 import { prisma } from '@/lib/prisma'
-import { askAdvisor } from '@/services/ask-advisor'
 import { type IsoDate, todayIso } from '@/lib/today'
+import { askAdvisor } from '@/services/ask-advisor'
 import { ensureWalletAccount } from '@/services/wallet'
 
 import {
