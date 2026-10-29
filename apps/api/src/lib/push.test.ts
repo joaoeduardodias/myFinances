@@ -8,10 +8,10 @@ const sendNotification = vi.fn()
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('web-push', () => ({ default: { sendNotification } }))
 
-const { sendPush } = await import('./push')
+const { isPushServiceUrl, sendPush } = await import('./push')
 
 const notification = { id: 'n1', title: 'Mercado em 80%', body: 'Você usou 80% do limite.' }
-const subscription = (id: string) => ({ id, endpoint: `https://push.test/${id}`, p256dh: 'p', auth: 'a' })
+const subscription = (id: string) => ({ id, endpoint: `https://fcm.googleapis.com/fcm/send/${id}`, p256dh: 'p', auth: 'a' })
 
 beforeEach(() => {
   resetPrismaMocks(prismaMock)
@@ -29,7 +29,7 @@ describe('sendPush', () => {
     expect(prismaMock.pushSubscription.findMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } })
     expect(sendNotification).toHaveBeenCalledTimes(2)
     expect(sendNotification).toHaveBeenCalledWith(
-      { endpoint: 'https://push.test/s1', keys: { p256dh: 'p', auth: 'a' } },
+      { endpoint: 'https://fcm.googleapis.com/fcm/send/s1', keys: { p256dh: 'p', auth: 'a' } },
       JSON.stringify(notification),
       expect.objectContaining({ TTL: 86400 }),
     )
@@ -60,5 +60,30 @@ describe('sendPush', () => {
   it('não consulta nada sem aviso novo', async () => {
     await sendPush('user-1', [])
     expect(prismaMock.pushSubscription.findMany).not.toHaveBeenCalled()
+  })
+
+  it('ignora inscrição gravada fora dos serviços de push', async () => {
+    prismaMock.pushSubscription.findMany.mockResolvedValue([
+      { id: 's1', endpoint: 'https://10.0.0.1/x', p256dh: 'p', auth: 'a' },
+    ])
+    await sendPush('user-1', [notification])
+    expect(sendNotification).not.toHaveBeenCalled()
+  })
+})
+
+describe('isPushServiceUrl', () => {
+  it.each([
+    ['https://fcm.googleapis.com/fcm/send/abc', true],
+    ['https://updates.push.services.mozilla.com/wpush/v2/x', true],
+    ['https://web.push.apple.com/abc', true],
+    ['https://wns2-par02p.notify.windows.com/w/?token=x', true],
+    ['http://fcm.googleapis.com/fcm/send/abc', false],
+    ['https://fcm.googleapis.com:8443/x', false],
+    ['https://fcm.googleapis.com.evil.com/x', false],
+    ['https://evilpush.apple.com/x', false],
+    ['https://169.254.169.254/latest', false],
+    ['https://localhost/x', false],
+  ])('%s → %s', (url, expected) => {
+    expect(isPushServiceUrl(url)).toBe(expected)
   })
 })

@@ -11,6 +11,24 @@ const vapid =
 /** Nulo = push desligado: o web não oferece ativar. */
 export const pushPublicKey = vapid?.publicKey ?? null
 
+// Serviços de push dos navegadores (Chrome/Edge, Firefox, Safari, Windows).
+// A API faz POST no endpoint: fora dessa lista seria SSRF.
+const PUSH_HOSTS = ['fcm.googleapis.com', 'updates.push.services.mozilla.com', 'push.apple.com', 'notify.windows.com']
+
+export function isPushServiceUrl(url: string): boolean {
+  try {
+    const { protocol, hostname, port } = new URL(url)
+    const host = hostname.toLowerCase().replace(/\.$/, '')
+    return (
+      protocol === 'https:' &&
+      port === '' &&
+      PUSH_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`))
+    )
+  } catch {
+    return false
+  }
+}
+
 // Um dia: o aviso continua no sininho, então não vale entregar muito depois.
 const TTL_SECONDS = 24 * 60 * 60
 
@@ -24,7 +42,9 @@ export async function sendPush(
 ): Promise<void> {
   if (!vapid || notifications.length === 0) return
   try {
-    const subscriptions = await prisma.pushSubscription.findMany({ where: { userId } })
+    const subscriptions = (await prisma.pushSubscription.findMany({ where: { userId } })).filter((s) =>
+      isPushServiceUrl(s.endpoint),
+    )
     const expired = new Set<string>()
     await Promise.all(
       subscriptions.flatMap((s) =>

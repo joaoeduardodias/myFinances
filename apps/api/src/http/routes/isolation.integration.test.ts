@@ -52,7 +52,7 @@ vi.mock('@/lib/pluggy/client', () => ({
 }))
 
 const EMAIL_DOMAIN = '@isolation.integration.test'
-const pushEndpointA = `https://push.isolation.test/${Date.now()}`
+const pushEndpointA = `https://fcm.googleapis.com/fcm/send/isolation-${Date.now()}`
 
 function isoMonthsAgo(months: number, day = 10) {
   const now = new Date()

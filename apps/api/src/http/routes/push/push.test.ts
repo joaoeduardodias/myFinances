@@ -57,9 +57,9 @@ describe('POST /push/subscriptions', () => {
     })
   })
 
-  it('recusa endpoint sem HTTPS', async () => {
+  it('recusa endpoint fora dos serviços de push', async () => {
     const res = await call(subscribePush, 'POST', '/push/subscriptions', {
-      endpoint: 'http://169.254.169.254/latest',
+      endpoint: 'https://169.254.169.254/latest',
       keys: { p256dh: 'p', auth: 'a' },
     })
     expect(res.statusCode).toBe(400)

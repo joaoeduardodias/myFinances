@@ -1,7 +1,8 @@
 import { z } from 'zod'
 
-/** A API faz POST nesse endereço ao enviar: só HTTPS, como os serviços de push. */
+import { isPushServiceUrl } from '@/lib/push'
+
 export const pushEndpointSchema = z
   .url()
   .max(2048)
-  .refine((url) => url.startsWith('https://'), 'O endpoint precisa ser HTTPS.')
+  .refine(isPushServiceUrl, 'O endpoint não é de um serviço de push conhecido.')
