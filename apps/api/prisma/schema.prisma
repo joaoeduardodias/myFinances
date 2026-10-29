@@ -29,6 +29,7 @@ model User {
   descriptionRules DescriptionRule[]
   categoryLimits CategoryLimit[]
   notifications Notification[]
+  pushSubscriptions PushSubscription[]
   // Avisar quando o "Quanto posso gastar" ficar negativo.
   spendableNegative Boolean @default(false) @map("spendable_negative")
 
@@ -339,4 +340,18 @@ model Notification {
   @@unique([userId, dedupeKey])
   @@index([userId, createdAt])
   @@map("notifications")
+}
+
+/// Inscrição de Web Push de um navegador; o endpoint identifica o navegador.
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }

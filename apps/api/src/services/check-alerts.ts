@@ -2,6 +2,7 @@ import { decideAlerts } from '@/lib/finance/alerts'
 import { monthlyCategorySpend } from '@/lib/finance/category-limits'
 import { computeProjection } from '@/lib/finance/projection'
 import { prisma } from '@/lib/prisma'
+import { sendPush } from '@/lib/push'
 import type { IsoDate } from '@/lib/today'
 
 import { loadAnalysisInput } from './load-analysis'
@@ -56,10 +57,13 @@ export async function checkAlerts(userId: string, today: IsoDate): Promise<void>
   })
 
   if (notifications.length > 0) {
-    await prisma.notification.createMany({
+    const created = await prisma.notification.createManyAndReturn({
       data: notifications.map((n) => ({ userId, ...n })),
       skipDuplicates: true,
+      select: { id: true, title: true, body: true },
     })
+    // Sem esperar: o envio sai da rede e não pode segurar a fila do usuário.
+    void sendPush(userId, created)
   }
   if (negative !== user.spendableNegative) {
     await prisma.user.update({ where: { id: userId }, data: { spendableNegative: negative } })

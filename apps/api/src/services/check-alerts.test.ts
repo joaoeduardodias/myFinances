@@ -5,10 +5,12 @@ import { makePrismaMock, resetPrismaMocks } from '@/test/helpers'
 const prismaMock = makePrismaMock()
 const loadFinanceSnapshot = vi.fn()
 const loadAnalysisInput = vi.fn()
+const sendPush = vi.fn()
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('./load-finance-snapshot', () => ({ loadFinanceSnapshot }))
 vi.mock('./load-analysis', () => ({ loadAnalysisInput }))
+vi.mock('@/lib/push', () => ({ sendPush }))
 
 const { checkAlerts } = await import('./check-alerts')
 
@@ -39,6 +41,7 @@ beforeEach(() => {
   resetPrismaMocks(prismaMock)
   loadFinanceSnapshot.mockReset()
   loadAnalysisInput.mockReset()
+  sendPush.mockReset()
   prismaMock.user.findUnique.mockResolvedValue({ spendableNegative: false })
   prismaMock.categoryLimit.findMany.mockResolvedValue([])
   prismaMock.notification.findMany.mockResolvedValue([])
@@ -53,7 +56,7 @@ describe('checkAlerts', () => {
       expect.objectContaining({ where: { userId: USER, status: 'ACTIVE' } }),
     )
     expect(loadAnalysisInput).not.toHaveBeenCalled()
-    expect(prismaMock.notification.createMany).not.toHaveBeenCalled()
+    expect(prismaMock.notification.createManyAndReturn).not.toHaveBeenCalled()
   })
 
   describe('com limite', () => {
@@ -69,7 +72,7 @@ describe('checkAlerts', () => {
       expect(prismaMock.notification.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { userId: USER, dedupeKey: { startsWith: 'category:' } } }),
       )
-      expect(prismaMock.notification.createMany).toHaveBeenCalledWith({
+      expect(prismaMock.notification.createManyAndReturn).toHaveBeenCalledWith({
         data: [
           expect.objectContaining({
             userId: USER,
@@ -78,7 +81,15 @@ describe('checkAlerts', () => {
           }),
         ],
         skipDuplicates: true,
+        select: { id: true, title: true, body: true },
       })
+    })
+
+    it('manda push só do que o banco gravou', async () => {
+      const created = [{ id: 'n1', title: 'Mercado em 80%', body: 'x' }]
+      prismaMock.notification.createManyAndReturn.mockResolvedValue(created)
+      await checkAlerts(USER, TODAY)
+      expect(sendPush).toHaveBeenCalledWith(USER, created)
     })
 
     it('não grava quando a chave já existe', async () => {
@@ -86,7 +97,8 @@ describe('checkAlerts', () => {
         { dedupeKey: 'category:Mercado:2026-10:80' },
       ])
       await checkAlerts(USER, TODAY)
-      expect(prismaMock.notification.createMany).not.toHaveBeenCalled()
+      expect(prismaMock.notification.createManyAndReturn).not.toHaveBeenCalled()
+      expect(sendPush).not.toHaveBeenCalled()
     })
   })
 
@@ -111,9 +123,10 @@ describe('checkAlerts', () => {
         where: { id: USER },
         data: { spendableNegative: true },
       })
-      expect(prismaMock.notification.createMany).toHaveBeenCalledWith({
+      expect(prismaMock.notification.createManyAndReturn).toHaveBeenCalledWith({
         data: [expect.objectContaining({ kind: 'SPENDABLE_NEGATIVE', userId: USER })],
         skipDuplicates: true,
+        select: { id: true, title: true, body: true },
       })
     })
 
@@ -131,7 +144,7 @@ describe('checkAlerts', () => {
         where: { id: USER },
         data: { spendableNegative: false },
       })
-      expect(prismaMock.notification.createMany).not.toHaveBeenCalled()
+      expect(prismaMock.notification.createManyAndReturn).not.toHaveBeenCalled()
     })
   })
 })

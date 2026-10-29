@@ -31,6 +31,11 @@ export const env = createEnv({
     WHATSAPP_APP_SECRET: z.string().optional(),
     WHATSAPP_VERIFY_TOKEN: z.string().optional(),
     WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+    /** Web Push: sem as três, os avisos não vão para o navegador. Gere com `npx web-push generate-vapid-keys`. */
+    VAPID_PUBLIC_KEY: z.string().optional(),
+    VAPID_PRIVATE_KEY: z.string().optional(),
+    /** `mailto:` ou URL de contato, exigido pelos serviços de push. */
+    VAPID_SUBJECT: z.string().optional(),
     S3_ENDPOINT: z.url(),
     S3_REGION: z.string().default('auto'),
     S3_BUCKET: z.string(),
