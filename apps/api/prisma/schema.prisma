@@ -29,6 +29,8 @@ model User {
   notifications Notification[]
   pushSubscriptions PushSubscription[]
   advisorSummary AdvisorSummary?
+  advisorMessages AdvisorMessage[]
+  advisorGoals AdvisorGoal[]
   // Avisar quando o "Quanto posso gastar" ficar negativo.
   spendableNegative Boolean @default(false) @map("spendable_negative")
 
@@ -345,6 +347,51 @@ model AdvisorSummary {
 }
 
 /// Chamadas do consultor ao Gemini por dia; a cota é da chave, não do usuário.
+enum AdvisorRole {
+  USER
+  ASSISTANT
+}
+
+/// Chat do consultor no app; some depois de ADVISOR_CHAT_DAYS.
+model AdvisorMessage {
+  id        String      @id @default(uuid())
+  userId    String      @map("user_id")
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      AdvisorRole
+  text      String
+  /// Metas propostas na resposta (GoalTarget[]); viram meta só quando o João aceita.
+  proposals Json?
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("advisor_messages")
+}
+
+enum AdvisorGoalKind {
+  CATEGORY
+  SAVINGS
+}
+
+/// Meta aceita no chat do consultor; ativa enquanto `endedAt` é nulo.
+model AdvisorGoal {
+  id            String          @id @default(uuid())
+  userId        String          @map("user_id")
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind          AdvisorGoalKind
+  /// Só no teto de categoria.
+  category      String?
+  targetCents   Int?            @map("target_cents")
+  /// Só na sobra: % mínima da renda.
+  targetPercent Int?            @map("target_percent")
+  /// Mês (YYYY-MM) em que foi aceita; o acompanhamento começa nele.
+  startMonth    String          @map("start_month")
+  endedAt       DateTime?       @map("ended_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("advisor_goals")
+}
+
 model AdvisorUsage {
   day   String @id
   calls Int

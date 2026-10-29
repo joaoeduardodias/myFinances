@@ -307,7 +307,7 @@ describe('perguntas ao consultor', () => {
   it('texto que termina em ? vai direto ao consultor, sem interpret', async () => {
     askAdvisor.mockResolvedValueOnce({ kind: 'answer', text: 'Dá, sobram R$ 900.' })
     await run({ text: 'dá pra comprar um tênis de 300?' })
-    expect(askAdvisor).toHaveBeenCalledWith('u1', 'dá pra comprar um tênis de 300?', today)
+    expect(askAdvisor).toHaveBeenCalledWith('u1', 'dá pra comprar um tênis de 300?', today, expect.anything())
     expect(interpret).not.toHaveBeenCalled()
     expect(client.sendText).toHaveBeenCalledWith('5511', 'Dá, sobram R$ 900.')
   })
@@ -324,7 +324,7 @@ describe('perguntas ao consultor', () => {
     interpret.mockResolvedValueOnce({ kind: 'question' })
     askAdvisor.mockResolvedValueOnce({ kind: 'answer', text: 'Gastou R$ 10.' })
     await run({ text: 'quanto gastei com mercado' })
-    expect(askAdvisor).toHaveBeenCalledWith('u1', 'quanto gastei com mercado', today)
+    expect(askAdvisor).toHaveBeenCalledWith('u1', 'quanto gastei com mercado', today, expect.anything())
     expect(client.sendText).toHaveBeenCalledWith('5511', 'Gastou R$ 10.')
   })
 

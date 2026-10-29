@@ -146,7 +146,7 @@ async function processMessage(
   try {
     const interpret = deps.interpret ?? interpretEntry
     const ask = async (question: string) => {
-      const answer = await (deps.askAdvisor ?? askAdvisor)(userId, question, today)
+      const answer = await (deps.askAdvisor ?? askAdvisor)(userId, question, today, { log: deps.log })
       return reply(answer.kind === 'answer' ? answer.text : ADVISOR_DOWN_REPLY)
     }
 

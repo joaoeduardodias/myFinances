@@ -23,7 +23,12 @@ export class GeminiUnavailableError extends Error {
   }
 }
 
-export type GeminiDeps = { fetch?: typeof fetch; apiKey?: string; retryDelayMs?: number }
+export type GeminiDeps = {
+  fetch?: typeof fetch
+  apiKey?: string
+  retryDelayMs?: number
+  timeoutMs?: number
+}
 
 export type GenerateJsonRequest = { system: string; parts: object[]; schema: object }
 
@@ -34,11 +39,12 @@ export async function generateJson(
 ): Promise<string> {
   const apiKey = deps.apiKey ?? env.GEMINI_API_KEY
   if (!apiKey) throw new GeminiUnavailableError('GEMINI_API_KEY ausente')
+  const timeoutMs = deps.timeoutMs ?? GEMINI_TIMEOUT_MS
 
   const post = () =>
     (deps.fetch ?? fetch)(ENDPOINT, {
       method: 'POST',
-      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
       headers: {
         'content-type': 'application/json',
         'x-goog-api-key': apiKey,
@@ -60,8 +66,12 @@ export async function generateJson(
       await new Promise((resolve) => setTimeout(resolve, deps.retryDelayMs ?? RETRY_DELAY_MS))
       response = await post()
     }
-  } catch {
-    throw new GeminiUnavailableError('Falha de rede ao chamar o Gemini')
+  } catch (error) {
+    if (error instanceof Error && error.name === 'TimeoutError') {
+      throw new GeminiUnavailableError(`Gemini não respondeu em ${timeoutMs / 1000} s`)
+    }
+    const cause = (error as { cause?: { code?: string } }).cause?.code
+    throw new GeminiUnavailableError(`Falha de rede ao chamar o Gemini${cause ? `: ${cause}` : ''}`)
   }
   if (!response.ok) {
     // O corpo explica o erro (ex.: modelo aposentado); sem ele o log só diria o status.

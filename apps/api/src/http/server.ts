@@ -22,7 +22,10 @@ import { auth } from './middlewares/auth'
 import { rateLimiter } from './middlewares/rate-limit'
 import { multipartOptions } from './multipart'
 import { getAccounts } from './routes/accounts/get-accounts'
+import { acceptAdvisorGoal } from './routes/advisor/accept-advisor-goal'
 import { askAdvisor } from './routes/advisor/ask-advisor'
+import { clearAdvisorChat } from './routes/advisor/clear-advisor-chat'
+import { endAdvisorGoal } from './routes/advisor/end-advisor-goal'
 import { getAdvisor } from './routes/advisor/get-advisor'
 import { getAnalysis } from './routes/analysis/get-analysis'
 import { getAnalysisTransactions } from './routes/analysis/get-analysis-transactions'
@@ -183,6 +186,9 @@ app.register(getNotifications)
 app.register(readNotifications)
 app.register(getAdvisor)
 app.register(askAdvisor)
+app.register(clearAdvisorChat)
+app.register(acceptAdvisorGoal)
+app.register(endAdvisorGoal)
 app.register(getPushPublicKey)
 app.register(subscribePush)
 app.register(unsubscribePush)

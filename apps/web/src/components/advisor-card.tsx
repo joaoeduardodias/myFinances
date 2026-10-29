@@ -1,51 +1,61 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { type FormEvent, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { RotateCcw } from 'lucide-react'
 
+import { AdvisorChat } from '@/components/advisor-chat'
+import { AdvisorGoals } from '@/components/advisor-goals'
 import { Button } from '@/components/ui/button'
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
 } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { askAdvisor, getAdvisor } from '@/http/advisor'
+import { Separator } from '@/components/ui/separator'
+import { type Advisor, clearAdvisorChat, getAdvisor } from '@/http/advisor'
 import { formatDate } from '@/lib/format'
 import type { IsoDate } from '@/lib/types'
 
-const UNAVAILABLE = 'Perguntas indisponíveis no momento.'
-
 export function AdvisorCard({ today }: { today: IsoDate }) {
-  const [question, setQuestion] = useState('')
+  const queryClient = useQueryClient()
   const { data } = useQuery({
     queryKey: ['advisor'],
     queryFn: getAdvisor,
   })
-  const ask = useMutation({
-    mutationFn: (text: string) => askAdvisor(text),
+  const clear = useMutation({
+    mutationFn: clearAdvisorChat,
+    onSuccess: () =>
+      queryClient.setQueryData<Advisor>(['advisor'], (old) =>
+        old ? { ...old, messages: [] } : old,
+      ),
   })
 
   // Erro no GET não derruba o Início: o card some.
   if (!data) return null
 
-  const trimmed = question.trim()
-  const unavailable =
-    !data.questionsAvailable || (ask.isSuccess && ask.data.answer === null)
-
-  function submit(event: FormEvent) {
-    event.preventDefault()
-    if (trimmed) ask.mutate(trimmed)
-  }
-
   return (
     <Card>
       <CardHeader>
         <CardDescription>Consultor</CardDescription>
+        {data.messages.length > 0 && (
+          <CardAction>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              disabled={clear.isPending}
+              onClick={() => clear.mutate()}
+            >
+              <RotateCcw />
+              Nova conversa
+            </Button>
+          </CardAction>
+        )}
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-col gap-5">
         {data.summary ? (
           <div className="flex flex-col gap-2">
-            <ul className="list-disc space-y-1 pl-5">
+            <ul className="marker:text-muted-foreground list-disc space-y-1.5 pl-5">
               {data.summary.points.map((point, index) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: pontos podem repetir
                 <li key={`${index}-${point}`}>{point}</li>
@@ -63,34 +73,11 @@ export function AdvisorCard({ today }: { today: IsoDate }) {
           </p>
         )}
 
-        <form onSubmit={submit} className="flex flex-col gap-2">
-          <label htmlFor="advisor-question" className="text-sm font-medium">
-            Pergunte ao consultor
-          </label>
-          <div className="flex gap-2">
-            <Input
-              id="advisor-question"
-              value={question}
-              maxLength={300}
-              disabled={unavailable}
-              onChange={(event) => setQuestion(event.target.value)}
-            />
-            <Button
-              type="submit"
-              disabled={unavailable || !trimmed || ask.isPending}
-            >
-              Perguntar
-            </Button>
-          </div>
-        </form>
+        <AdvisorGoals goals={data.goals} />
 
-        {ask.isPending && <p className="text-muted-foreground">Pensando…</p>}
-        {ask.isSuccess && ask.data.answer && (
-          <p className="whitespace-pre-line">{ask.data.answer}</p>
-        )}
-        {(unavailable || ask.isError) && (
-          <p className="text-muted-foreground">{UNAVAILABLE}</p>
-        )}
+        <Separator />
+
+        <AdvisorChat data={data} />
       </CardContent>
     </Card>
   )

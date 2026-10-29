@@ -5,18 +5,20 @@ import { computeProjection } from '@/lib/finance/projection'
 import { prisma } from '@/lib/prisma'
 import type { IsoDate } from '@/lib/today'
 
+import { loadActiveGoals } from './advisor-goals'
 import { loadAnalysisInput } from './load-analysis'
 import { loadFinanceSnapshot } from './load-finance-snapshot'
 
 /** Reúne projeção, análise e limites do usuário no pacote de totais do consultor. */
 export async function loadAdvisorPack(userId: string, today: IsoDate): Promise<AdvisorPack> {
-  const [snapshot, analysis, limitRows] = await Promise.all([
+  const [snapshot, analysis, limitRows, goals] = await Promise.all([
     loadFinanceSnapshot(userId, today),
     loadAnalysisInput(userId, today),
     prisma.categoryLimit.findMany({
       where: { userId, status: 'ACTIVE' },
       select: { category: true, limitCents: true },
     }),
+    loadActiveGoals(userId),
   ])
 
   const { accounts, cardBills, recurrences, transactions } = snapshot
@@ -35,5 +37,6 @@ export async function loadAdvisorPack(userId: string, today: IsoDate): Promise<A
     months: annualAnalysis(analysis).months,
     spend: monthlyCategorySpend(analysis.transactions, analysis.overrides),
     limits,
+    goals,
   })
 }

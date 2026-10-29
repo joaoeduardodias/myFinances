@@ -58,8 +58,41 @@ describe('buildAdvisorPack', () => {
     expect(pack.spendable.untilDate).toBe('2026-11-05')
   })
 
-  it('traz 4 meses terminando no de today', () => {
-    expect(pack.months.map((m) => m.month)).toEqual(['2026-07', '2026-08', '2026-09', '2026-10'])
+  it('traz os 12 meses terminando no de today', () => {
+    expect(pack.months.map((m) => m.month)).toEqual(months.map((m) => m.month))
+  })
+
+  it('pula os meses do começo sem nenhum dado', () => {
+    const sparse = months.map((m, i) => (i < 9 ? month(m.month) : m))
+    const trimmed = buildAdvisorPack({ today, projection, months: sparse, spend, limits })
+    expect(trimmed.months.map((m) => m.month)).toEqual(['2026-08', '2026-09', '2026-10'])
+  })
+
+  it('prompt traz metas com andamento e indicadores', () => {
+    const goals = [
+      { target: { kind: 'CATEGORY' as const, category: 'Restaurante', targetCents: 20000 }, startMonth: '2026-09' },
+      { target: { kind: 'SAVINGS' as const, targetPercent: 20 }, startMonth: '2026-10' },
+    ]
+    const withGoals = buildAdvisorPack({ today, projection, months, spend, limits, goals })
+    const text = packPrompt(withGoals)
+    expect(withGoals.goals[0].months).toEqual([
+      { month: '2026-09', value: 30000, met: false, partial: false },
+      { month: '2026-10', value: 10000, met: true, partial: true },
+    ])
+    expect(text).toContain('Metas ativas:')
+    expect(text).toContain('- Restaurante até R$ 200,00/mês desde setembro de 2026: setembro de 2026 R$ 300,00 estourou; outubro de 2026 R$ 100,00 até agora')
+    expect(text).toContain('- Sobra de pelo menos 20% da renda desde outubro de 2026: outubro de 2026 100% até agora')
+    expect(text).toContain('Tendência da renda: estável.')
+    expect(text).toContain('sobra 100%')
+    expect(text).toContain('- novembro de 2025: R$ 5.000,00')
+    expect(text).not.toMatch(/\d{4}-\d{2}/)
+  })
+
+  it('prompt traz o investido de cada mês', () => {
+    const withInvested = months.map((m) => (m.month === '2026-09' ? { ...m, investedCents: 70000 } : m))
+    const text = packPrompt(buildAdvisorPack({ today, projection, months: withInvested, spend, limits }))
+    expect(text).toContain('investido')
+    expect(text).toContain('R$ 700,00')
   })
 
   it('conta limites respeitados no último mês fechado', () => {

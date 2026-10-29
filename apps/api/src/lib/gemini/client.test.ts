@@ -45,6 +45,36 @@ describe('generateJson', () => {
     )
   })
 
+  it('espera 15 s por padrão ou o tempo pedido', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+
+    await generateJson(request, { fetch: vi.fn(async () => ok('{}')), apiKey: 'k' })
+    await generateJson(request, { fetch: vi.fn(async () => ok('{}')), apiKey: 'k', timeoutMs: 60_000 })
+
+    expect(timeout.mock.calls).toEqual([[15_000], [60_000]])
+    timeout.mockRestore()
+  })
+
+  it('diz quando o Gemini passou do tempo', async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+    })
+
+    await expect(generateJson(request, { fetch: fetchMock, apiKey: 'k' })).rejects.toThrow(
+      'Gemini não respondeu em 15 s',
+    )
+  })
+
+  it('inclui a causa da falha de rede', async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError('fetch failed', { cause: { code: 'ENOTFOUND' } })
+    })
+
+    await expect(generateJson(request, { fetch: fetchMock, apiKey: 'k' })).rejects.toThrow(
+      'Falha de rede ao chamar o Gemini: ENOTFOUND',
+    )
+  })
+
   it('inclui o motivo do corpo de erro', async () => {
     const fetchMock = vi.fn(
       async () => new Response(JSON.stringify({ error: { message: 'model retired' } }), { status: 404 }),

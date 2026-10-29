@@ -16,6 +16,9 @@ vi.mock('@/http/dashboard', () => ({
 vi.mock('@/http/advisor', () => ({
   getAdvisor: vi.fn(() => new Promise(() => {})),
   askAdvisor: vi.fn(),
+  clearAdvisorChat: vi.fn(),
+  acceptAdvisorGoal: vi.fn(),
+  endAdvisorGoal: vi.fn(),
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 
@@ -358,6 +361,8 @@ describe('Home', () => {
     vi.mocked(getAdvisor).mockResolvedValue({
       summary: null,
       questionsAvailable: true,
+      messages: [],
+      goals: [],
     })
     renderHome()
     await waitFor(() => expect(getAdvisor).toHaveBeenCalledTimes(1))
