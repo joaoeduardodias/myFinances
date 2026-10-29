@@ -104,6 +104,8 @@ export function makePrismaMock() {
     categoryLimit: model(),
     notification: model(),
     pushSubscription: model(),
+    advisorSummary: model(),
+    advisorUsage: model(),
     $transaction: vi.fn((callback) => callback(prisma)),
     $queryRaw: vi.fn(),
     $executeRaw: vi.fn(),

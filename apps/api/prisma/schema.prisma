@@ -28,6 +28,7 @@ model User {
   categoryLimits CategoryLimit[]
   notifications Notification[]
   pushSubscriptions PushSubscription[]
+  advisorSummary AdvisorSummary?
   // Avisar quando o "Quanto posso gastar" ficar negativo.
   spendableNegative Boolean @default(false) @map("spendable_negative")
 
@@ -329,4 +330,24 @@ model PushSubscription {
 
   @@index([userId])
   @@map("push_subscriptions")
+}
+
+/// Último resumo do consultor: um por usuário, trocado no máximo uma vez por dia.
+model AdvisorSummary {
+  userId    String   @id @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Dia (YYYY-MM-DD, fuso do app) em que foi gerado.
+  day       String
+  points    String[]
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("advisor_summaries")
+}
+
+/// Chamadas do consultor ao Gemini por dia; a cota é da chave, não do usuário.
+model AdvisorUsage {
+  day   String @id
+  calls Int
+
+  @@map("advisor_usage")
 }
