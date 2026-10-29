@@ -6,7 +6,7 @@ import type { EntryDraft } from '@/lib/gemini/interpret-entry'
 import { prisma } from '@/lib/prisma'
 import { todayIso } from '@/lib/today'
 import type { AccountType } from '@/prisma/generated/client'
-import { checkAlertsSafely } from '@/services/check-alerts'
+import { onNewTransactions } from '@/services/on-new-transactions'
 import { runExclusive } from '@/services/user-queue'
 import { recomputeWalletBalance } from '@/services/wallet'
 
@@ -86,7 +86,7 @@ export function saveWhatsappEntry(
             ...category,
           },
         })
-        await checkAlertsSafely(userId, todayIso())
+        await onNewTransactions(userId, todayIso())
         return { kind: 'renamed', accountName: account.name, accountType: account.type }
       }
 
@@ -110,7 +110,7 @@ export function saveWhatsappEntry(
     }
 
     if (account.type === 'WALLET') await recomputeWalletBalance(account.id)
-    await checkAlertsSafely(userId, todayIso())
+    await onNewTransactions(userId, todayIso())
     return { kind: 'created', accountName: account.name, accountType: account.type }
   })
 }

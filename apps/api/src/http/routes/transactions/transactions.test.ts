@@ -13,8 +13,8 @@ const prismaMock = makePrismaMock()
 const checkAlerts = vi.fn()
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
-vi.mock('@/services/check-alerts', () => ({
-  checkAlertsSafely: async (...args: unknown[]) => {
+vi.mock('@/services/on-new-transactions', () => ({
+  onNewTransactions: async (...args: unknown[]) => {
     try {
       await checkAlerts(...args)
     } catch {}

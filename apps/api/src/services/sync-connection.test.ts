@@ -14,8 +14,8 @@ const detectAndStoreRecurrencesMock = vi.fn()
 const checkAlertsMock = vi.fn()
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
-vi.mock('@/services/check-alerts', () => ({
-  checkAlertsSafely: async (...args: unknown[]) => {
+vi.mock('@/services/on-new-transactions', () => ({
+  onNewTransactions: async (...args: unknown[]) => {
     try {
       await checkAlertsMock(...args)
     } catch {}

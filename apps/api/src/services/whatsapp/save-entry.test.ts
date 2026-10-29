@@ -9,8 +9,8 @@ const runExclusive = vi.fn((_userId: string, task: () => Promise<unknown>) => ta
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/services/wallet', () => ({ recomputeWalletBalance }))
-vi.mock('@/services/check-alerts', () => ({
-  checkAlertsSafely: async (...args: unknown[]) => {
+vi.mock('@/services/on-new-transactions', () => ({
+  onNewTransactions: async (...args: unknown[]) => {
     try {
       await checkAlerts(...args)
     } catch {}
