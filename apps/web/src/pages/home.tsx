@@ -120,6 +120,8 @@ export function Home() {
   const sync = useMutation({
     mutationFn: (force: boolean) => syncAll(force),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+    // O resumo do consultor pode ter mudado com o que o sync trouxe.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['advisor'] }),
     onError: () =>
       toast.error('Não foi possível sincronizar agora. Tente novamente.'),
   })

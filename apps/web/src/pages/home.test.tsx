@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { getAdvisor } from '@/http/advisor'
 import { type Dashboard, getDashboard, syncAll } from '@/http/dashboard'
 
 import { Home } from './home'
@@ -135,6 +136,7 @@ describe('Home', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(syncAll).mockResolvedValue({ synced: 0 })
+    vi.mocked(getAdvisor).mockReturnValue(new Promise(() => {}))
   })
 
   it('shows what can be spent and the per-day line', async () => {
@@ -344,6 +346,23 @@ describe('Home', () => {
     await screen.findByText('R$ 700,00')
     await waitFor(() => expect(getDashboard).toHaveBeenCalledTimes(2))
     expect(syncAll).toHaveBeenCalledTimes(1)
+  })
+
+  it('refetches the advisor summary when the sync ends', async () => {
+    let finishSync: (value: { synced: number }) => void = () => {}
+    vi.mocked(syncAll).mockReturnValue(
+      new Promise((resolve) => {
+        finishSync = resolve
+      }),
+    )
+    vi.mocked(getAdvisor).mockResolvedValue({
+      summary: null,
+      questionsAvailable: true,
+    })
+    renderHome()
+    await waitFor(() => expect(getAdvisor).toHaveBeenCalledTimes(1))
+    finishSync({ synced: 1 })
+    await waitFor(() => expect(getAdvisor).toHaveBeenCalledTimes(2))
   })
 
   it('forces a sync from the button', async () => {
