@@ -12,6 +12,8 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('./advisor-quota', () => ({ takeAdvisorCall }))
 vi.mock('./load-advisor-pack', () => ({ loadAdvisorPack }))
 vi.mock('@/lib/advisor/pack', () => ({ isEmptyPack }))
+const writeSummary = vi.fn()
+vi.mock('@/lib/gemini/advisor', () => ({ writeSummary }))
 
 const { refreshAdvisorSummary, refreshAdvisorSummaryInBackground } = await import('./advisor-summary')
 
@@ -24,6 +26,7 @@ beforeEach(() => {
   loadAdvisorPack.mockResolvedValue({ pack: true })
   isEmptyPack.mockReturnValue(false)
   takeAdvisorCall.mockResolvedValue(true)
+  writeSummary.mockResolvedValue(['x'])
 })
 
 describe('refreshAdvisorSummary', () => {
@@ -79,14 +82,23 @@ describe('refreshAdvisorSummaryInBackground', () => {
     spy.mockRestore()
   })
 
+  it('falha do Gemini: sem upsert e sem lançar', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    writeSummary.mockRejectedValue(new GeminiUnavailableError('fora'))
+    expect(() => refreshAdvisorSummaryInBackground('user-gem', TODAY)).not.toThrow()
+    await vi.waitFor(() => expect(spy).toHaveBeenCalled())
+    expect(prismaMock.advisorSummary.upsert).not.toHaveBeenCalled()
+    spy.mockRestore()
+  })
+
   it('não roda duas vezes ao mesmo tempo para o mesmo usuário', async () => {
     let release: () => void = () => {}
-    loadAdvisorPack.mockReturnValue(new Promise<object>((r) => { release = () => r({}) }))
+    loadAdvisorPack.mockReturnValue(new Promise((r) => { release = () => r({ pack: true }) }))
     refreshAdvisorSummaryInBackground('user-dup', TODAY)
     refreshAdvisorSummaryInBackground('user-dup', TODAY)
-    await vi.waitFor(() => expect(loadAdvisorPack).toHaveBeenCalledTimes(1))
     release()
-    await vi.waitFor(() => expect(takeAdvisorCall).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(prismaMock.advisorSummary.upsert).toHaveBeenCalledTimes(1))
+    expect(writeSummary).toHaveBeenCalledTimes(1)
     expect(loadAdvisorPack).toHaveBeenCalledTimes(1)
   })
 })
