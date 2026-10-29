@@ -21,6 +21,7 @@ import { getPayslip } from './payslips/get-payslip'
 import { getPayslipFile } from './payslips/get-payslip-file'
 import { getPayslips } from './payslips/get-payslips'
 import { updatePayslipLines } from './payslips/update-payslip-lines'
+import { unsubscribePush } from './push/unsubscribe-push'
 import { dismissRecurrence } from './recurrences/dismiss-recurrence'
 import { getRecurrences } from './recurrences/get-recurrences'
 import { updateRecurrence } from './recurrences/update-recurrence'
@@ -51,6 +52,7 @@ vi.mock('@/lib/pluggy/client', () => ({
 }))
 
 const EMAIL_DOMAIN = '@isolation.integration.test'
+const pushEndpointA = `https://push.isolation.test/${Date.now()}`
 
 function isoMonthsAgo(months: number, day = 10) {
   const now = new Date()
@@ -178,6 +180,9 @@ describe('isolamento entre usuários', () => {
     await prisma.notification.create({
       data: { userId: userAId, kind: 'CATEGORY_EXCEEDED', title: 'Limite de A', body: 'Aviso de A' },
     })
+    await prisma.pushSubscription.create({
+      data: { userId: userAId, endpoint: pushEndpointA, p256dh: 'p', auth: 'a' },
+    })
 
     app = await buildTestApp(
       getConnections,
@@ -204,6 +209,7 @@ describe('isolamento entre usuários', () => {
       getCategoryLimits,
       getNotifications,
       readNotifications,
+      unsubscribePush,
     )
     tokenB = await signToken(app, { sub: userBId })
   })
@@ -310,6 +316,17 @@ describe('isolamento entre usuários', () => {
       const res = await app.inject({ method: 'GET', url: '/notifications', headers })
       expect(res.json().unreadCount).toBe(1)
       expect(res.json().notifications[0]).toMatchObject({ title: 'Limite de A', read: false })
+    })
+
+    it('DELETE /push/subscriptions de B não apaga a inscrição de A', async () => {
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/push/subscriptions',
+        headers: asB(),
+        payload: { endpoint: pushEndpointA },
+      })
+      expect(res.statusCode).toBe(204)
+      expect(await prisma.pushSubscription.count({ where: { endpoint: pushEndpointA } })).toBe(1)
     })
   })
 

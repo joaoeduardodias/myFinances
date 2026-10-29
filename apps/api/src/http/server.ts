@@ -53,6 +53,9 @@ import { getPayslipFile } from './routes/payslips/get-payslip-file'
 import { getPayslips } from './routes/payslips/get-payslips'
 import { updatePayslipLines } from './routes/payslips/update-payslip-lines'
 import { uploadPayslip } from './routes/payslips/upload-payslip'
+import { getPushPublicKey } from './routes/push/get-push-public-key'
+import { subscribePush } from './routes/push/subscribe-push'
+import { unsubscribePush } from './routes/push/unsubscribe-push'
 import { createRecurrence } from './routes/recurrences/create-recurrence'
 import { dismissRecurrence } from './routes/recurrences/dismiss-recurrence'
 import { getRecurrences } from './routes/recurrences/get-recurrences'
@@ -176,6 +179,9 @@ app.register(updateCategoryLimit)
 app.register(declineCategoryLimit)
 app.register(getNotifications)
 app.register(readNotifications)
+app.register(getPushPublicKey)
+app.register(subscribePush)
+app.register(unsubscribePush)
 app.register(getCards)
 app.register(updateCardCycle)
 app.register(getDashboard)
