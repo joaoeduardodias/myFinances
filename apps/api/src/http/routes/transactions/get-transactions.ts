@@ -68,7 +68,9 @@ export async function getTransactions(app: FastifyInstance) {
         if (category) where.category = category === 'none' ? null : category
         if (kind === 'income') Object.assign(where, { amountCents: { gt: 0 }, isTransfer: false })
         if (kind === 'expense') Object.assign(where, { amountCents: { lt: 0 }, isTransfer: false })
+        // Sem filtro de tipo, transferência entre contas fica de fora: o dinheiro não sai do bolso.
         if (kind === 'transfer') where.isTransfer = true
+        if (!kind) where.isTransfer = false
 
         const [count, rows] = await Promise.all([
           prisma.transaction.count({ where }),

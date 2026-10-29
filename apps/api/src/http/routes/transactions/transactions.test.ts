@@ -71,6 +71,29 @@ describe('GET /transactions', () => {
     account: { name: 'Nubank', type: 'CHECKING' },
   }
 
+  it('sem tipo deixa as transferências de fora; kind=transfer traz só elas', async () => {
+    prismaMock.transaction.count.mockResolvedValue(0)
+    prismaMock.transaction.findMany.mockResolvedValue([])
+
+    await call(getTransactions, { method: 'GET', url: '/transactions' })
+    await call(getTransactions, { method: 'GET', url: '/transactions?kind=transfer' })
+
+    expect(prismaMock.transaction.findMany.mock.calls[0][0].where.isTransfer).toBe(false)
+    expect(prismaMock.transaction.findMany.mock.calls[1][0].where.isTransfer).toBe(true)
+  })
+
+  it('devolve a conta do outro lado da transferência', async () => {
+    prismaMock.transaction.count.mockResolvedValue(1)
+    prismaMock.transaction.findMany.mockResolvedValue([
+      { ...row, isTransfer: true, transferPair: { account: { name: 'Caixa' } } },
+    ])
+
+    const res = await call(getTransactions, { method: 'GET', url: '/transactions' })
+
+    expect(res.json().transactions[0]).toMatchObject({ transferAccount: 'Caixa' })
+    expect(res.json().transactions[0]).not.toHaveProperty('transferPair')
+  })
+
   it('kind=expense exclui transferências e pagina em 50', async () => {
     prismaMock.transaction.count.mockResolvedValue(120)
     prismaMock.transaction.findMany.mockResolvedValue([row])

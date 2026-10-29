@@ -23,7 +23,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -54,7 +53,7 @@ import { type Sort, toggleSort } from '@/lib/sort'
 const KINDS: { value: TransactionKind; label: string }[] = [
   { value: 'income', label: 'Entradas' },
   { value: 'expense', label: 'Saídas' },
-  { value: 'transfer', label: 'Transferências' },
+  { value: 'transfer', label: 'Transferências entre contas' },
 ]
 
 const SORT_COLUMNS: TransactionSortColumn[] = [
@@ -68,7 +67,17 @@ const SORT_COLUMNS: TransactionSortColumn[] = [
 const incomeClass = 'text-income'
 
 function amountClass(t: Transaction) {
+  // Transferência só troca o dinheiro de conta: não é gasto nem entrada.
+  if (t.isTransfer) return 'text-muted-foreground'
   return t.amountCents < 0 ? 'text-destructive' : incomeClass
+}
+
+/** "Nubank → Caixa" na direção do dinheiro; sem par, fica o texto do banco. */
+function transferRoute(t: Transaction) {
+  if (!t.transferAccount) return t.description
+  return t.amountCents < 0
+    ? `${t.account.name} → ${t.transferAccount}`
+    : `${t.transferAccount} → ${t.account.name}`
 }
 
 export function Transactions() {
@@ -325,44 +334,55 @@ export function Transactions() {
                       {formatDate(t.date)}
                     </TableCell>
                     <TableCell className="whitespace-normal break-words">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span>{t.description}</span>
-                        {t.isTransfer && (
-                          <Badge variant="secondary">Transferência</Badge>
-                        )}
-                      </div>
-                      <span className="text-muted-foreground text-xs md:hidden">
-                        {t.account.name}
-                      </span>
+                      {t.isTransfer ? (
+                        <div className="flex flex-col">
+                          <span>Transferência entre contas</span>
+                          <span className="text-muted-foreground text-xs">
+                            {transferRoute(t)}
+                          </span>
+                        </div>
+                      ) : (
+                        <>
+                          <span>{t.description}</span>
+                          <span className="block text-muted-foreground text-xs md:hidden">
+                            {t.account.name}
+                          </span>
+                        </>
+                      )}
                     </TableCell>
                     <TableCell className="hidden truncate md:table-cell">
                       {t.account.name}
                     </TableCell>
                     <TableCell>
-                      <NativeSelect
-                        aria-label={`Categoria de ${t.description}`}
-                        value={t.category ?? ''}
-                        onChange={(e) =>
-                          changeCategory.mutate({
-                            id: t.id,
-                            category: e.target.value,
-                          })
-                        }
-                      >
-                        {!t.category && (
-                          <option value="" disabled>
-                            Sem categoria
-                          </option>
-                        )}
-                        {t.category && !categoryNames.includes(t.category) && (
-                          <option value={t.category}>{t.category}</option>
-                        )}
-                        {categoryNames.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </NativeSelect>
+                      {t.isTransfer ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        <NativeSelect
+                          aria-label={`Categoria de ${t.description}`}
+                          value={t.category ?? ''}
+                          onChange={(e) =>
+                            changeCategory.mutate({
+                              id: t.id,
+                              category: e.target.value,
+                            })
+                          }
+                        >
+                          {!t.category && (
+                            <option value="" disabled>
+                              Sem categoria
+                            </option>
+                          )}
+                          {t.category &&
+                            !categoryNames.includes(t.category) && (
+                              <option value={t.category}>{t.category}</option>
+                            )}
+                          {categoryNames.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </NativeSelect>
+                      )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       <span className={amountClass(t)}>

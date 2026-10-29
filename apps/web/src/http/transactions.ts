@@ -32,6 +32,8 @@ export interface Transaction {
   isTransfer: boolean
   source: 'PLUGGY' | 'MANUAL' | 'SYSTEM'
   account: { name: string; type: AccountType }
+  /** Conta do outro lado, quando a transferência está pareada. */
+  transferAccount: string | null
 }
 
 export interface TransactionsPage {

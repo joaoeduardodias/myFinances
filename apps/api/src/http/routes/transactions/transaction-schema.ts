@@ -13,6 +13,7 @@ export const transactionSelect = {
   isTransfer: true,
   source: true,
   account: { select: { name: true, type: true } },
+  transferPair: { select: { account: { select: { name: true } } } },
 } as const
 
 export const transactionSchema = z.object({
@@ -26,6 +27,8 @@ export const transactionSchema = z.object({
   isTransfer: z.boolean(),
   source: z.enum(['PLUGGY', 'MANUAL', 'SYSTEM']),
   account: z.object({ name: z.string(), type: z.string() }),
+  /** Conta do outro lado da transferência pareada. */
+  transferAccount: z.string().nullable(),
 })
 
 /** Volta de `Date.UTC` igual ao texto: 2026-02-31 viraria 03/03 e é recusado. */
@@ -39,11 +42,12 @@ export const isoDate = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida (use AAAA-MM-DD).')
   .refine(isCalendarDate, 'Data inexistente no calendário.')
 
-type TransactionRow = Omit<z.infer<typeof transactionSchema>, 'date' | 'account'> & {
+type TransactionRow = Omit<z.infer<typeof transactionSchema>, 'date' | 'account' | 'transferAccount'> & {
   date: Date
   account: { name: string; type: string }
+  transferPair?: { account: { name: string } } | null
 }
 
-export function serializeTransaction(row: TransactionRow) {
-  return { ...row, date: fromDbDate(row.date) }
+export function serializeTransaction({ transferPair, ...row }: TransactionRow) {
+  return { ...row, date: fromDbDate(row.date), transferAccount: transferPair?.account.name ?? null }
 }

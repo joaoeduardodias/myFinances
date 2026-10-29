@@ -37,6 +37,7 @@ function tx(over: Record<string, unknown> = {}) {
     isTransfer: false,
     source: 'PLUGGY',
     account: { name: 'Nubank', type: 'BANK' },
+    transferAccount: null,
     ...over,
   }
 }
@@ -95,8 +96,14 @@ describe('Transactions', () => {
 
   it('toggles the transfer flag', async () => {
     const user = userEvent.setup()
-    renderPage([tx({ isTransfer: true })])
-    expect(await screen.findByText('Transferência')).toBeInTheDocument()
+    renderPage([tx({ isTransfer: true, transferAccount: 'Caixa' })])
+    expect(
+      await screen.findByText('Transferência entre contas'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Nubank → Caixa')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('combobox', { name: 'Categoria de Mercado' }),
+    ).not.toBeInTheDocument()
     await user.click(
       screen.getByRole('button', { name: 'Desfazer transferência: Mercado' }),
     )
