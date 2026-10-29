@@ -1,22 +1,13 @@
-import { env } from '@myfinances/env'
 import { z } from 'zod'
 
 import { isCalendarDate } from '../../http/routes/transactions/transaction-schema'
 import { addDays } from '../finance/business-days'
 import { CATEGORIES, type Category } from '../finance/categories'
 import type { IsoDate } from '../today'
+import { GEMINI_MODEL, type GeminiDeps, GeminiUnavailableError, generateJson } from './client'
 
-/**
- * Flash Lite gratuito; trocar aqui se a Google aposentar o modelo (o 2.5 saiu
- * para contas novas em 2026-10). Lite e não Flash pela cota: o Flash grátis dá
- * 20 chamadas por dia. O 3.8 passou de 90 s numa resposta: não serve.
- */
-export const GEMINI_MODEL = 'gemini-3.5-flash-lite'
-
-const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
-
-/** Sem isso um Gemini travado seguraria o webhook do WhatsApp. */
-const GEMINI_TIMEOUT_MS = 15_000
+// Reexportados: quem já importa daqui continua funcionando.
+export { GEMINI_MODEL, GeminiUnavailableError }
 
 /** Até quantos dias atrás um lançamento manual pode ser datado. */
 const MAX_DAYS_BACK = 60
@@ -45,14 +36,6 @@ export type Interpretation =
   | { kind: 'entry'; draft: EntryDraft; accountId: string }
   | { kind: 'ask_account'; draft: EntryDraft; candidateAccountIds: string[] }
   | { kind: 'not_understood'; reply: string }
-
-/** Gemini fora do ar, sem chave, limitado ou com resposta ilegível. */
-export class GeminiUnavailableError extends Error {
-  constructor(message = 'Gemini indisponível') {
-    super(message)
-    this.name = 'GeminiUnavailableError'
-  }
-}
 
 const SYSTEM_INSTRUCTION = `Você extrai UM lançamento financeiro pessoal de uma mensagem de WhatsApp (texto ou foto de comprovante/nota) escrita em português do Brasil.
 
@@ -102,11 +85,6 @@ type Input = {
   today: IsoDate
 }
 
-type Deps = { fetch?: typeof fetch; apiKey?: string; retryDelayMs?: number }
-
-/** Sobrecarga do Google (503/429) costuma passar em segundos: uma segunda tentativa. */
-const RETRY_DELAY_MS = 1_000
-
 function buildPrompt(input: Input): string {
   // Só id, nome e tipo: saldo não sai do servidor.
   const accounts = input.accounts.map(({ id, name, type }) => ({
@@ -122,70 +100,6 @@ function buildPrompt(input: Input): string {
   ].join('\n')
 }
 
-async function callGemini(input: Input, deps: Deps): Promise<string> {
-  const apiKey = deps.apiKey ?? env.GEMINI_API_KEY
-  if (!apiKey) throw new GeminiUnavailableError('GEMINI_API_KEY ausente')
-
-  const parts: object[] = [{ text: buildPrompt(input) }]
-  if (input.image) {
-    parts.push({
-      inline_data: {
-        mime_type: input.image.mimeType,
-        data: input.image.data.toString('base64'),
-      },
-    })
-  }
-
-  const post = () =>
-    (deps.fetch ?? fetch)(ENDPOINT, {
-      method: 'POST',
-      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
-      headers: {
-        'content-type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
-        contents: [{ role: 'user', parts }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseJsonSchema: RESPONSE_SCHEMA,
-        },
-      }),
-    })
-
-  let response: Response
-  try {
-    response = await post()
-    if (response.status === 503 || response.status === 429) {
-      await new Promise((resolve) => setTimeout(resolve, deps.retryDelayMs ?? RETRY_DELAY_MS))
-      response = await post()
-    }
-  } catch {
-    throw new GeminiUnavailableError('Falha de rede ao chamar o Gemini')
-  }
-  if (!response.ok) {
-    // O corpo explica o erro (ex.: modelo aposentado); sem ele o log só diria o status.
-    const reason = await (response.json() as Promise<{ error?: { message?: string } }>)
-      .then((body) => body.error?.message)
-      .catch(() => undefined)
-    throw new GeminiUnavailableError(
-      `Gemini respondeu ${response.status}${reason ? `: ${reason}` : ''}`,
-    )
-  }
-
-  try {
-    const json = (await response.json()) as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[]
-    }
-    const text = json.candidates?.[0]?.content?.parts?.[0]?.text
-    if (typeof text !== 'string') throw new Error('sem texto')
-    return text
-  } catch {
-    throw new GeminiUnavailableError('Resposta do Gemini ilegível')
-  }
-}
-
 function parseRaw(text: string): z.infer<typeof rawSchema> {
   try {
     return rawSchema.parse(JSON.parse(text))
@@ -196,9 +110,20 @@ function parseRaw(text: string): z.infer<typeof rawSchema> {
 
 export async function interpretEntry(
   input: Input,
-  deps: Deps = {},
+  deps: GeminiDeps = {},
 ): Promise<Interpretation> {
-  const raw = parseRaw(await callGemini(input, deps))
+  const parts: object[] = [{ text: buildPrompt(input) }]
+  if (input.image) {
+    parts.push({
+      inline_data: {
+        mime_type: input.image.mimeType,
+        data: input.image.data.toString('base64'),
+      },
+    })
+  }
+  const raw = parseRaw(
+    await generateJson({ system: SYSTEM_INSTRUCTION, parts, schema: RESPONSE_SCHEMA }, deps),
+  )
 
   if (!raw.understood) {
     const missing = raw.missing?.trim()
