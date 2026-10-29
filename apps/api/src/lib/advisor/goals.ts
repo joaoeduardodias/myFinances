@@ -110,7 +110,7 @@ export function parseProposals(
 
 export type AdvisorIndicators = {
   months: { month: string; savedPercent: number | null; essentialPercent: number | null }[]
-  /** Média de renda dos 3 últimos meses fechados contra a dos 3 anteriores. */
+  /** Média de renda (do salário, quando conhecido) dos 3 últimos meses fechados contra a dos 3 anteriores. */
   incomeTrend: 'UP' | 'DOWN' | 'STABLE' | null
   /** Categorias em alta contínua nos 3 últimos meses fechados. */
   risingCategories: string[]
@@ -120,13 +120,15 @@ export function advisorIndicators(
   months: AnalysisMonth[],
   spend: SpendByMonth,
   currentMonth: string,
+  salaryByMonth?: Map<string, number>,
 ): AdvisorIndicators {
   const closed = months.filter((m) => m.month < currentMonth)
 
   let incomeTrend: AdvisorIndicators['incomeTrend'] = null
   const recent = closed.slice(-TREND_MONTHS)
   const before = closed.slice(-2 * TREND_MONTHS, -TREND_MONTHS)
-  const avg = (list: AnalysisMonth[]) => list.reduce((sum, m) => sum + m.incomeCents, 0) / list.length
+  const income = (m: AnalysisMonth) => (salaryByMonth ? (salaryByMonth.get(m.month) ?? 0) : m.incomeCents)
+  const avg = (list: AnalysisMonth[]) => list.reduce((sum, m) => sum + income(m), 0) / list.length
   if (before.length === TREND_MONTHS && avg(before) > 0) {
     const ratio = avg(recent) / avg(before) - 1
     incomeTrend = ratio > STABLE_INCOME_RATIO ? 'UP' : ratio < -STABLE_INCOME_RATIO ? 'DOWN' : 'STABLE'

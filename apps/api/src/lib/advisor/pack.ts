@@ -27,9 +27,12 @@ export type AdvisorPack = {
   /** Mês de `today`: gasto e limite por categoria de LIMIT_CATEGORIES com gasto ou limite. */
   categories: { category: string; spentCents: number; limitCents: number | null }[]
   /** Até 12 meses terminando no atual, mais antigo primeiro, a partir do primeiro com dado. */
+  /** Renda é o salário das recorrências confirmadas; o resto das entradas vai em `otherInCents`. */
+  incomeIsSalary: boolean
   months: {
     month: string
     incomeCents: number
+    otherInCents: number
     essentialCents: number
     avoidableCents: number
     emergencyCents: number
@@ -41,7 +44,7 @@ export type AdvisorPack = {
   /** Limites respeitados no último mês fechado; `null` sem limite ativo. */
   limitsKept: { month: string; kept: number; total: number } | null
   indicators: AdvisorIndicators
-  /** Primeiro mês completo da conta que recebe a renda; antes dele `months` não tem a renda. */
+  /** Primeiro mês completo da conta que recebe a renda na Pluggy; antes dele faltam os gastos dela. */
   historyStartMonth: string | null
   /** Metas ativas com o andamento desde o mês em que foram aceitas. */
   goals: { target: GoalTarget; startMonth: string; months: GoalMonth[] }[]
@@ -67,15 +70,15 @@ export function buildAdvisorPack(input: {
   limits: { category: string; limitCents: number }[]
   goals?: { target: GoalTarget; startMonth: string }[]
   historyStartMonth?: string | null
+  /** Salário por mês; sem ele, toda entrada conta como renda. */
+  salaryByMonth?: Map<string, number>
 }): AdvisorPack {
   const { today, projection, spend, limits } = input
   // Meses antes do primeiro dado leriam como gasto zero para o Gemini.
   const first = input.months.findIndex((m) => hasData(m, spend))
-  const withData = first < 0 ? input.months.slice(-1) : input.months.slice(first)
-  // Sem a conta da renda, o mês leria como gasto maior que a renda.
-  const historyStartMonth = input.historyStartMonth ?? null
-  const covered = historyStartMonth ? withData.filter((m) => m.month >= historyStartMonth) : withData
-  const months = covered.length > 0 ? covered : input.months.slice(-1)
+  const months = first < 0 ? input.months.slice(-1) : input.months.slice(first)
+  const historyStartMonth =
+    input.historyStartMonth && months.some((m) => m.month < input.historyStartMonth!) ? input.historyStartMonth : null
   const currentMonth = today.slice(0, 7)
   const limitByCategory = new Map(limits.map((l) => [l.category, l.limitCents]))
 
@@ -112,24 +115,39 @@ export function buildAdvisorPack(input: {
     },
     payables: projection.payables.map((p) => ({ dueDate: p.dueDate, amountCents: p.amountCents })),
     categories,
-    months: months.map((m) => ({
-      month: m.month,
-      incomeCents: m.incomeCents,
-      essentialCents: m.essentialCents,
-      avoidableCents: m.avoidableCents,
-      emergencyCents: m.emergencyCents,
-      debtCents: m.debtCents,
-      investedCents: m.investedCents,
-    })),
+    incomeIsSalary: input.salaryByMonth !== undefined,
+    months: months.map((m) => {
+      const incomeCents = input.salaryByMonth ? (input.salaryByMonth.get(m.month) ?? 0) : m.incomeCents
+      return {
+        month: m.month,
+        incomeCents,
+        otherInCents: Math.max(0, m.incomeCents - incomeCents),
+        essentialCents: m.essentialCents,
+        avoidableCents: m.avoidableCents,
+        emergencyCents: m.emergencyCents,
+        debtCents: m.debtCents,
+        investedCents: m.investedCents,
+      }
+    }),
     categoryHistory,
     limitsKept,
-    historyStartMonth:
-      historyStartMonth && input.months.some((m) => m.month < historyStartMonth) ? historyStartMonth : null,
-    indicators: advisorIndicators(months, spend, currentMonth),
+    historyStartMonth,
+    indicators: partialBefore(advisorIndicators(months, spend, currentMonth, input.salaryByMonth), historyStartMonth),
     goals: (input.goals ?? []).map((goal) => ({
       ...goal,
       months: goalProgress(goal.target, goal.startMonth, { months: input.months, spend, currentMonth }),
     })),
+  }
+}
+
+/** Sem os gastos da conta da renda, % de sobra e de essencial enganariam: ficam em branco. */
+function partialBefore(indicators: AdvisorIndicators, start: string | null): AdvisorIndicators {
+  if (!start) return indicators
+  return {
+    ...indicators,
+    months: indicators.months.map((m) =>
+      m.month < start ? { month: m.month, savedPercent: null, essentialPercent: null } : m,
+    ),
   }
 }
 
@@ -224,14 +242,16 @@ export function packPrompt(pack: AdvisorPack): string {
 
   if (pack.historyStartMonth) {
     lines.push(
-      `Histórico completo só desde ${monthName(pack.historyStartMonth)}: antes disso falta a conta que recebe a renda.`,
+      `Antes de ${monthName(pack.historyStartMonth)} faltam os gastos da conta que recebe a renda: nesses meses os gastos estão incompletos e a sobra não vale.`,
     )
   }
-  lines.push('Meses (renda, essencial, evitável, emergência, dívida, investido; sobra e essencial em % da renda):')
+  lines.push(
+    `Meses (${pack.incomeIsSalary ? 'salário' : 'renda'}, outras entradas, essencial, evitável, emergência, dívida, investido; sobra e essencial em % de tudo o que entrou):`,
+  )
   pack.months.forEach((m, i) => {
     const ind = pack.indicators.months[i]
     lines.push(
-      `- ${monthName(m.month)}: ${money(m.incomeCents)}, ${money(m.essentialCents)}, ${money(m.avoidableCents)}, ${money(m.emergencyCents)}, ${money(m.debtCents)}, ${money(m.investedCents)}; sobra ${percent(ind.savedPercent)}, essencial ${percent(ind.essentialPercent)}`,
+      `- ${monthName(m.month)}: ${money(m.incomeCents)}, ${money(m.otherInCents)}, ${money(m.essentialCents)}, ${money(m.avoidableCents)}, ${money(m.emergencyCents)}, ${money(m.debtCents)}, ${money(m.investedCents)}; sobra ${percent(ind.savedPercent)}, essencial ${percent(ind.essentialPercent)}`,
     )
   })
   if (pack.indicators.incomeTrend) {

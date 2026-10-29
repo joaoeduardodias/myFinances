@@ -88,18 +88,28 @@ describe('buildAdvisorPack', () => {
     expect(text).not.toMatch(/\d{4}-\d{2}/)
   })
 
-  it('começa no mês em que a conta da renda já tinha dados e avisa no prompt', () => {
-    const short = buildAdvisorPack({ today, projection, months, spend, limits, historyStartMonth: '2026-09' })
-    expect(short.months.map((m) => m.month)).toEqual(['2026-09', '2026-10'])
-    expect(packPrompt(short)).toContain(
-      'Histórico completo só desde setembro de 2026: antes disso falta a conta que recebe a renda.',
+  it('mantém os meses antes da conta da renda, sem sobra nem essencial em %, e avisa no prompt', () => {
+    const partial = buildAdvisorPack({ today, projection, months, spend, limits, historyStartMonth: '2026-09' })
+    expect(partial.months).toHaveLength(12)
+    expect(partial.indicators.months.find((m) => m.month === '2026-08')).toEqual({
+      month: '2026-08',
+      savedPercent: null,
+      essentialPercent: null,
+    })
+    expect(partial.indicators.months.find((m) => m.month === '2026-09')?.savedPercent).toBe(100)
+    expect(packPrompt(partial)).toContain(
+      'Antes de setembro de 2026 faltam os gastos da conta que recebe a renda: nesses meses os gastos estão incompletos e a sobra não vale.',
     )
-    expect(packPrompt(pack)).not.toContain('Histórico completo')
+    expect(packPrompt(pack)).not.toContain('faltam os gastos')
   })
 
-  it('início depois do mês atual deixa só o mês atual', () => {
-    const none = buildAdvisorPack({ today, projection, months, spend, limits, historyStartMonth: '2026-11' })
-    expect(none.months.map((m) => m.month)).toEqual(['2026-10'])
+  it('com salário, renda é só o salário e o resto vira outras entradas; a tendência olha o salário', () => {
+    const salaryMonths = new Map(months.map((m) => [m.month, 400000]))
+    const withSalary = buildAdvisorPack({ today, projection, months, spend, limits, salaryByMonth: salaryMonths })
+    expect(withSalary.months.at(-1)).toMatchObject({ incomeCents: 400000, otherInCents: 100000 })
+    expect(withSalary.indicators.incomeTrend).toBe('STABLE')
+    expect(packPrompt(withSalary)).toContain('Meses (salário, outras entradas,')
+    expect(packPrompt(withSalary)).toContain('- outubro de 2026: R$ 4.000,00, R$ 1.000,00,')
   })
 
   it('prompt traz o investido de cada mês', () => {
