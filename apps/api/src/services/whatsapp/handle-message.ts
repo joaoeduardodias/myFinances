@@ -26,6 +26,7 @@ import {
   CANCELLED_REPLY,
   ERROR_REPLY,
   GEMINI_DOWN_REPLY,
+  QUESTION_IN_TEXT_REPLY,
   renamedReply,
   savedReply,
   UNSUPPORTED_REPLY,
@@ -115,11 +116,13 @@ async function processMessage(
 
   const today = deps.today ?? todayIso()
   const text = msg.text?.trim()
+  // "desfazer?" e "1?" continuam sendo desfazer e resposta, não pergunta ao consultor.
+  const bare = text?.replace(/\?+$/, '').trim()
 
   // Pendente vivo + "desfazer": cancela o pendente; apagar o lançamento
   // anterior seria apagar o que o usuário não quis dizer.
   const pending = takePending(userId, deps.now)
-  if (text && isUndo(text)) {
+  if (bare && isUndo(bare)) {
     if (pending) return reply(CANCELLED_REPLY)
     return reply(undoReply(await undoWhatsappEntry(userId, lastEntry(userId))))
   }
@@ -135,8 +138,8 @@ async function processMessage(
   }
 
   // Um pendente só vale para a próxima mensagem; se ela não responde, é nova.
-  if (pending && text) {
-    const accountId = resolveAccountAnswer(text, pending.options)
+  if (pending && bare) {
+    const accountId = resolveAccountAnswer(bare, pending.options)
     if (accountId) return save(pending.draft, accountId, pending.messageId)
   }
 
@@ -166,7 +169,7 @@ async function processMessage(
     const image = msg.imageId ? await client.downloadMedia(msg.imageId) : undefined
     const result = await interpret({ text, image, accounts, today })
 
-    if (result.kind === 'question') return ask(text ?? '')
+    if (result.kind === 'question') return text ? ask(text) : reply(QUESTION_IN_TEXT_REPLY)
 
     if (result.kind === 'entry') return save(result.draft, result.accountId, msg.id)
 

@@ -342,6 +342,31 @@ describe('perguntas ao consultor', () => {
     expect(interpret).toHaveBeenCalled()
   })
 
+  it('"desfazer?" desfaz, sem ir ao consultor', async () => {
+    interpret.mockResolvedValueOnce({ kind: 'entry', draft, accountId: 'a1' })
+    await run({ id: 'm0', text: 'almoço 45' })
+    undoWhatsappEntry.mockResolvedValue({ kind: 'deleted' })
+    await run({ id: 'm2', text: 'desfazer?' })
+    expect(undoWhatsappEntry).toHaveBeenCalledWith('u1', 'm0')
+    expect(askAdvisor).not.toHaveBeenCalled()
+  })
+
+  it('"1?" com pendente escolhe a conta, sem ir ao consultor', async () => {
+    ask()
+    await run({ text: 'almoço 45' })
+    await run({ id: 'm2', text: '1?' })
+    expect(saveWhatsappEntry).toHaveBeenCalledWith('u1', expect.objectContaining({ accountId: 'a1' }))
+    expect(askAdvisor).not.toHaveBeenCalled()
+  })
+
+  it('foto sem texto que o interpret lê como pergunta pede a pergunta por escrito', async () => {
+    client.downloadMedia.mockResolvedValue({ data: Buffer.from('x'), mimeType: 'image/jpeg' })
+    interpret.mockResolvedValueOnce({ kind: 'question' })
+    await run({ imageId: 'img' })
+    expect(askAdvisor).not.toHaveBeenCalled()
+    expect(client.sendText).toHaveBeenCalledWith('5511', 'Manda a pergunta por escrito que eu respondo.')
+  })
+
   it('GeminiUnavailableError do consultor cai em GEMINI_DOWN_REPLY', async () => {
     askAdvisor.mockRejectedValueOnce(new GeminiUnavailableError('x'))
     await run({ text: 'posso gastar mais?' })
