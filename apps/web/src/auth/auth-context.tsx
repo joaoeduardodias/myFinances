@@ -11,6 +11,7 @@ import {
 import type { Profile } from '@/http/auth'
 import { getProfile, logout as logoutSession } from '@/http/auth'
 import { hasSession, setToken } from '@/lib/cookies'
+import { disablePush } from '@/lib/push'
 
 import { endSession } from './end-session'
 
@@ -74,6 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const signOut = useCallback(async () => {
+    // Antes do logout: a remoção na API ainda precisa da sessão.
+    await disablePush()
     try {
       await logoutSession()
     } catch {

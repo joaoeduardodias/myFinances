@@ -1,14 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BellIcon } from 'lucide-react'
+import { BellIcon, BellRingIcon } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { getNotifications, markNotificationsRead } from '@/http/notifications'
 import { formatDateTimeToDate } from '@/lib/format'
+import { enablePush, isPushSupported, resyncPush } from '@/lib/push'
 import { cn } from '@/lib/utils'
 
 export function NotificationsBell() {
@@ -23,6 +27,39 @@ export function NotificationsBell() {
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   })
+
+  // null = ainda não sabe; o botão de ativar só aparece com `false`.
+  const [pushActive, setPushActive] = useState<boolean | null>(null)
+  const pushSupported = isPushSupported()
+
+  useEffect(() => {
+    if (!pushSupported) return
+    resyncPush()
+      .then(setPushActive)
+      .catch(() => setPushActive(false))
+    // O service worker avisa quando chega push com a aba aberta.
+    const onMessage = () =>
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    const { serviceWorker } = navigator
+    serviceWorker.addEventListener('message', onMessage)
+    return () => serviceWorker.removeEventListener('message', onMessage)
+  }, [pushSupported, queryClient])
+
+  async function handleEnablePush() {
+    try {
+      const result = await enablePush()
+      if (result === 'enabled') {
+        setPushActive(true)
+        toast.success('Avisos ativados neste navegador.')
+      } else if (result === 'denied') {
+        toast.error('O navegador bloqueou as notificações.')
+      } else {
+        toast.error('Notificações do navegador indisponíveis no servidor.')
+      }
+    } catch {
+      toast.error('Não foi possível ativar as notificações.')
+    }
+  }
 
   const unreadCount = data?.unreadCount ?? 0
   const notifications = data?.notifications ?? []
@@ -74,6 +111,15 @@ export function NotificationsBell() {
               </li>
             ))}
           </ul>
+        )}
+        {pushActive === false && (
+          <DropdownMenuItem
+            className="rounded-none border-t p-3"
+            onSelect={handleEnablePush}
+          >
+            <BellRingIcon />
+            Receber avisos no navegador
+          </DropdownMenuItem>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

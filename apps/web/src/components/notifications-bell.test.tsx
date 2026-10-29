@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   type AppNotification,
@@ -9,11 +9,18 @@ import {
   markNotificationsRead,
 } from '@/http/notifications'
 
+import { enablePush, isPushSupported, resyncPush } from '@/lib/push'
+
 import { NotificationsBell } from './notifications-bell'
 
 vi.mock('@/http/notifications', () => ({
   getNotifications: vi.fn(),
   markNotificationsRead: vi.fn(),
+}))
+vi.mock('@/lib/push', () => ({
+  isPushSupported: vi.fn(() => false),
+  resyncPush: vi.fn(),
+  enablePush: vi.fn(),
 }))
 
 const item = (over: Partial<AppNotification>): AppNotification => ({
@@ -91,5 +98,44 @@ describe('NotificationsBell', () => {
     setup(0, [])
     await userEvent.click(screen.getByRole('button', { name: /^Avisos/ }))
     expect(await screen.findByText('Nenhum aviso.')).toBeInTheDocument()
+  })
+
+  describe('push do navegador', () => {
+    beforeEach(() => {
+      vi.mocked(isPushSupported).mockReturnValue(true)
+      Object.defineProperty(navigator, 'serviceWorker', {
+        configurable: true,
+        value: { addEventListener: vi.fn(), removeEventListener: vi.fn() },
+      })
+    })
+
+    afterEach(() => {
+      vi.mocked(isPushSupported).mockReturnValue(false)
+      Reflect.deleteProperty(navigator, 'serviceWorker')
+    })
+
+    it('oferece ativar quando o navegador ainda não está inscrito', async () => {
+      vi.mocked(resyncPush).mockResolvedValue(false)
+      vi.mocked(enablePush).mockResolvedValue('enabled')
+      setup(0, [])
+      await userEvent.click(screen.getByRole('button', { name: 'Avisos' }))
+      await userEvent.click(
+        await screen.findByRole('menuitem', {
+          name: 'Receber avisos no navegador',
+        }),
+      )
+      expect(enablePush).toHaveBeenCalledTimes(1)
+    })
+
+    it('não oferece quando já está ativo', async () => {
+      vi.mocked(resyncPush).mockResolvedValue(true)
+      setup(0, [])
+      await waitFor(() => expect(resyncPush).toHaveBeenCalled())
+      await userEvent.click(screen.getByRole('button', { name: 'Avisos' }))
+      await screen.findByText('Nenhum aviso.')
+      expect(
+        screen.queryByRole('menuitem', { name: 'Receber avisos no navegador' }),
+      ).not.toBeInTheDocument()
+    })
   })
 })
