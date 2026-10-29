@@ -7,7 +7,7 @@ import { GeminiUnavailableError } from './client'
 
 const PACK: AdvisorPack = {
   today: '2026-10-15',
-  spendable: { availableCents: 123456, perDayCents: 5000, untilDate: '2026-11-05', noIncomeConfigured: false },
+  spendable: { availableCents: 123456, perDayCents: 5000, untilDate: '2026-11-05', windowEnd: '2026-11-05', noIncomeConfigured: false },
   payables: [{ dueDate: '2026-10-20', amountCents: 80000 }],
   categories: [{ category: 'Restaurante', spentCents: 30000, limitCents: 50000 }],
   months: [],

@@ -86,6 +86,26 @@ describe('buildAdvisorPack', () => {
     expect(text).toContain('R$ 1.234,56')
     expect(text).toContain('05/11')
   })
+
+  it('sem renda, o prompt ainda traz quanto posso gastar até o fim do mês', () => {
+    const noIncome = buildAdvisorPack({
+      today,
+      projection: {
+        ...projection,
+        nextIncome: null,
+        noIncomeConfigured: true,
+        windowEnd: '2026-10-31',
+        availableCents: 50000,
+        perDayCents: 3125,
+      },
+      months,
+      spend,
+      limits,
+    })
+    const text = packPrompt(noIncome)
+    expect(text).toContain('Sem renda configurada.')
+    expect(text).toContain('Quanto posso gastar até o fim do mês (31/10): R$ 500,00 no total, R$ 31,25 por dia.')
+  })
 })
 
 describe('isEmptyPack', () => {

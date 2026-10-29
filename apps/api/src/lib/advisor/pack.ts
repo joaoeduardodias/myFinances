@@ -8,7 +8,14 @@ const PACK_MONTHS = 4
 
 export type AdvisorPack = {
   today: IsoDate
-  spendable: { availableCents: number; perDayCents: number; untilDate: IsoDate | null; noIncomeConfigured: boolean }
+  spendable: {
+    availableCents: number
+    perDayCents: number
+    untilDate: IsoDate | null
+    /** Fim da projeção: o próximo recebimento ou, sem renda, o último dia do mês. */
+    windowEnd: IsoDate
+    noIncomeConfigured: boolean
+  }
   payables: { dueDate: IsoDate; amountCents: number }[]
   /** Mês de `today`: gasto e limite por categoria de LIMIT_CATEGORIES com gasto ou limite. */
   categories: { category: string; spentCents: number; limitCents: number | null }[]
@@ -72,6 +79,7 @@ export function buildAdvisorPack(input: {
       availableCents: projection.availableCents,
       perDayCents: projection.perDayCents,
       untilDate: projection.nextIncome?.date ?? null,
+      windowEnd: projection.windowEnd,
       noIncomeConfigured: projection.noIncomeConfigured,
     },
     payables: projection.payables.map((p) => ({ dueDate: p.dueDate, amountCents: p.amountCents })),
@@ -112,13 +120,15 @@ export function packPrompt(pack: AdvisorPack): string {
   const { spendable } = pack
   const lines: string[] = [`Hoje: ${shortDate(pack.today)}`]
 
-  lines.push(
-    spendable.noIncomeConfigured
-      ? 'Sem renda configurada.'
-      : `Quanto posso gastar: ${money(spendable.availableCents)} no total, ${money(spendable.perDayCents)} por dia${
-          spendable.untilDate ? ` até ${shortDate(spendable.untilDate)}` : ''
-        }.`,
-  )
+  const totals = `${money(spendable.availableCents)} no total, ${money(spendable.perDayCents)} por dia`
+  if (spendable.noIncomeConfigured) {
+    lines.push('Sem renda configurada.')
+    lines.push(`Quanto posso gastar até o fim do mês (${shortDate(spendable.windowEnd)}): ${totals}.`)
+  } else {
+    lines.push(
+      `Quanto posso gastar: ${totals}${spendable.untilDate ? ` até ${shortDate(spendable.untilDate)}` : ''}.`,
+    )
+  }
 
   if (pack.payables.length > 0) {
     lines.push('A pagar:')
