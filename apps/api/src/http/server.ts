@@ -22,6 +22,8 @@ import { auth } from './middlewares/auth'
 import { rateLimiter } from './middlewares/rate-limit'
 import { multipartOptions } from './multipart'
 import { getAccounts } from './routes/accounts/get-accounts'
+import { askAdvisor } from './routes/advisor/ask-advisor'
+import { getAdvisor } from './routes/advisor/get-advisor'
 import { getAnalysis } from './routes/analysis/get-analysis'
 import { getAnalysisTransactions } from './routes/analysis/get-analysis-transactions'
 import { authenticateWithPassword } from './routes/auth/authenticate-with-password'
@@ -179,6 +181,8 @@ app.register(updateCategoryLimit)
 app.register(declineCategoryLimit)
 app.register(getNotifications)
 app.register(readNotifications)
+app.register(getAdvisor)
+app.register(askAdvisor)
 app.register(getPushPublicKey)
 app.register(subscribePush)
 app.register(unsubscribePush)
