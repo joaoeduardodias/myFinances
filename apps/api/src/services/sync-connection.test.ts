@@ -12,14 +12,18 @@ const prismaMock = makePrismaMock()
 
 const detectAndStoreRecurrencesMock = vi.fn()
 const checkAlertsMock = vi.fn()
+const refreshSummaryMock = vi.fn()
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
-vi.mock('@/services/on-new-transactions', () => ({
-  onNewTransactions: async (...args: unknown[]) => {
+vi.mock('@/services/check-alerts', () => ({
+  checkAlertsSafely: async (...args: unknown[]) => {
     try {
       await checkAlertsMock(...args)
     } catch {}
   },
+}))
+vi.mock('@/services/advisor-summary', () => ({
+  refreshAdvisorSummaryInBackground: refreshSummaryMock,
 }))
 vi.mock('./detect-and-store-recurrences', () => ({
   detectAndStoreRecurrences: detectAndStoreRecurrencesMock,
@@ -106,6 +110,12 @@ let existingTxs: {
   accountId: string
   descriptionLocked?: boolean
   descriptionKey?: string
+  date?: Date
+  amountCents?: number
+  status?: string
+  description?: string
+  originalDescription?: string | null
+  category?: string | null
 }[]
 let pairingRows: PairingRow[]
 let manualRows: ManualRow[]
@@ -153,6 +163,7 @@ beforeEach(() => {
   prismaMock.transaction.delete.mockResolvedValue({})
   detectAndStoreRecurrencesMock.mockReset()
   checkAlertsMock.mockReset()
+  refreshSummaryMock.mockReset()
   detectAndStoreRecurrencesMock.mockResolvedValue(0)
 })
 
@@ -192,6 +203,76 @@ describe('syncConnection', () => {
     expect(checkAlertsMock.mock.invocationCallOrder[0]).toBeGreaterThan(
       detectAndStoreRecurrencesMock.mock.invocationCallOrder[0],
     )
+  })
+
+  it('transação nova dispara o resumo do consultor', async () => {
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+    expect(refreshSummaryMock).toHaveBeenCalledWith(USER, TODAY)
+  })
+
+  it('só transações já gravadas e iguais: confere alarmes, mas não chama o resumo', async () => {
+    existingTxs = [
+      {
+        pluggyTransactionId: 'p-tx-1',
+        userId: USER,
+        categoryLocked: false,
+        accountId: 'db-p-acc-new',
+        descriptionLocked: false,
+        descriptionKey: 'ifood restaurante',
+        date: new Date('2026-10-10T00:00:00Z'),
+        amountCents: -4290,
+        status: 'POSTED',
+        description: 'IFOOD *RESTAURANTE',
+        originalDescription: null,
+        category: 'Delivery',
+      },
+    ]
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    expect(checkAlertsMock).toHaveBeenCalledWith(USER, TODAY)
+    expect(refreshSummaryMock).not.toHaveBeenCalled()
+  })
+
+  it('transação gravada com valor diferente dispara o resumo', async () => {
+    existingTxs = [
+      {
+        pluggyTransactionId: 'p-tx-1',
+        userId: USER,
+        categoryLocked: false,
+        accountId: 'db-p-acc-new',
+        date: new Date('2026-10-10T00:00:00Z'),
+        amountCents: -1000,
+        status: 'POSTED',
+        description: 'IFOOD *RESTAURANTE',
+        category: 'Delivery',
+      },
+    ]
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    expect(refreshSummaryMock).toHaveBeenCalledWith(USER, TODAY)
+  })
+
+  it('transação que sumiu da Pluggy dispara o resumo', async () => {
+    existingTxs = [
+      {
+        pluggyTransactionId: 'p-tx-1',
+        userId: USER,
+        categoryLocked: false,
+        accountId: 'db-p-acc-new',
+        date: new Date('2026-10-10T00:00:00Z'),
+        amountCents: -4290,
+        status: 'POSTED',
+        description: 'IFOOD *RESTAURANTE',
+        category: 'Delivery',
+      },
+    ]
+    removedRows = [{ id: 'gone', transferPair: null, transferPairOf: null }]
+
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+
+    expect(refreshSummaryMock).toHaveBeenCalledWith(USER, TODAY)
   })
 
   it('falha no alarme não impede a sincronização', async () => {

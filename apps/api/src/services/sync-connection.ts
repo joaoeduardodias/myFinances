@@ -19,8 +19,9 @@ import { INSTITUTIONS } from '@/lib/pluggy/institutions'
 import type { PluggyAccount } from '@/lib/pluggy/types'
 import { prisma } from '@/lib/prisma'
 import { type IsoDate, todayIso } from '@/lib/today'
+import { refreshAdvisorSummaryInBackground } from './advisor-summary'
+import { checkAlertsSafely } from './check-alerts'
 import { detectAndStoreRecurrences } from './detect-and-store-recurrences'
-import { onNewTransactions } from './on-new-transactions'
 import { removeTransactions } from './remove-transactions'
 import { runExclusive } from './user-queue'
 import { ensureWalletAccount, recomputeWalletBalance } from './wallet'
@@ -89,7 +90,7 @@ async function runSync(
     const dateFrom = connection.lastSyncedAt
       ? addDays(todayIso(env.TIMEZONE, connection.lastSyncedAt), -RESYNC_OVERLAP_DAYS)
       : addDays(today, -FIRST_SYNC_DAYS)
-    const renewed = await syncTransactions(client, accounts, userId, dateFrom)
+    const { renewed, changed } = await syncTransactions(client, accounts, userId, dateFrom)
     await mergeRenewedAccounts(renewed, userId, connectionId, today)
     await syncBills(client, accounts, userId)
     // Na primeira sincronização o ano inteiro é novo e precisa ser pareado.
@@ -97,7 +98,9 @@ async function runSync(
     await pairTransfers(userId, today, transferWindowDays)
     // Depois do pareamento: transferência não vira recorrente.
     await detectAndStoreRecurrences(userId, today)
-    await onNewTransactions(userId, today)
+    await checkAlertsSafely(userId, today)
+    // Abrir o app sincroniza; sem transação nova ou mudada, o resumo não gasta o Gemini.
+    if (changed) refreshAdvisorSummaryInBackground(userId, today)
 
     await prisma.connection.update({
       where: { id: connectionId },
@@ -194,9 +197,11 @@ async function syncTransactions(
   accounts: SyncedAccount[],
   userId: string,
   dateFrom: IsoDate,
-): Promise<Map<string, string>> {
+): Promise<{ renewed: Map<string, string>; changed: boolean }> {
   // Conta antiga → conta nova, quando uma transação mudou de conta (item renovado).
   const renewed = new Map<string, string>()
+  // Alguma transação criada, apagada ou com dado diferente do que estava gravado.
+  let changed = false
 
   for (const account of accounts) {
     const remote = await client.listTransactions(account.pluggyAccountId, dateFrom)
@@ -208,13 +213,14 @@ async function syncTransactions(
     // sai daqui também, senão conta duas vezes. O dia do `dateFrom` fica de
     // fora: a data gravada é a do fuso do usuário e pode não bater com o
     // corte da Pluggy.
-    await removeTransactions({
+    const removed = await removeTransactions({
       userId,
       accountId: account.id,
       source: 'PLUGGY',
       date: { gt: toDbDate(dateFrom) },
       pluggyTransactionId: { notIn: remote.map((t) => t.id) },
     })
+    if (removed > 0) changed = true
 
     // Ler antes para saber de quem é a linha e se a categoria está travada.
     const existing = await prisma.transaction.findMany({
@@ -226,6 +232,12 @@ async function syncTransactions(
         descriptionLocked: true,
         descriptionKey: true,
         accountId: true,
+        date: true,
+        amountCents: true,
+        status: true,
+        description: true,
+        originalDescription: true,
+        category: true,
       },
     })
     const existingById = new Map(existing.map((t) => [t.pluggyTransactionId, t]))
@@ -277,6 +289,17 @@ async function syncTransactions(
 
       const matchId = current ? null : pickEntryMatch({ accountId: account.id, amountCents, date }, candidates)
       const match = matchId ? manualById.get(matchId) : undefined
+      if (
+        !current ||
+        current.accountId !== account.id ||
+        current.amountCents !== amountCents ||
+        current.date.getTime() !== fields.date.getTime() ||
+        current.status !== tx.status ||
+        (current.descriptionLocked ? current.originalDescription : current.description) !== tx.description ||
+        (!current.categoryLocked && current.category !== category)
+      ) {
+        changed = true
+      }
       if (match) {
         // O lançamento vira a transação da Pluggy com o nome que o usuário deu;
         // ficar com os dois contaria o gasto duas vezes.
@@ -314,7 +337,7 @@ async function syncTransactions(
       })
     }
   }
-  return renewed
+  return { renewed, changed }
 }
 
 const RECURRENCE_STATUS_RANK = { CONFIRMED: 2, DISMISSED: 1, SUGGESTED: 0 } as const
