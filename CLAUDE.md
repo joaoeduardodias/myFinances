@@ -11,6 +11,8 @@ Monorepo pnpm + Turborepo: `apps/api` (Fastify + Prisma) e `apps/web` (Vite + Re
 - Webhook da Pluggy: `pnpm --filter @myfinances/api pluggy:webhook <https-url>`.
 - Cadastrar o número do WhatsApp: `pnpm --filter @myfinances/api whatsapp:link <email> <telefone>`. Estado e pendências da Meta em `docs/whatsapp-setup.md`.
 - Portas: API 3333, web 5173, Postgres 127.0.0.1:5435 (bancos `myfinances` e `myfinances_test`).
+- psql no banco de dev: `docker exec myfinances-pg-1 sh -c "psql -U \$POSTGRES_USER -d myfinances"`.
+- Testes da API: `resetPrismaMocks` zera também o `$transaction`; teste de código com transação interativa precisa religar `mockImplementation((cb) => cb(prismaMock))`.
 
 ## Decisões de produto
 
