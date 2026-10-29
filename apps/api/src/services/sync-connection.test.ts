@@ -130,8 +130,6 @@ beforeEach(() => {
     where.type === 'WALLET' ? { id: 'wallet-1', type: 'WALLET' } : null,
   )
   prismaMock.account.update.mockResolvedValue({})
-  prismaMock.categoryRule.findMany.mockResolvedValue([])
-  prismaMock.descriptionRule.findMany.mockResolvedValue([])
   // A leitura antes do upsert pede `in`; a das que sumiram da Pluggy, `notIn`;
   // a dos lançamentos do WhatsApp, `whatsappMessageId`.
   prismaMock.transaction.findMany.mockImplementation(async ({ where }) =>
@@ -370,49 +368,6 @@ describe('syncConnection', () => {
     expect(dates).toEqual([new Date('2026-10-10T00:00:00Z'), new Date('2026-10-11T00:00:00Z')])
   })
 
-  it('não aplica regra para chave vazia', async () => {
-    prismaMock.categoryRule.findMany.mockResolvedValue([{ descriptionKey: '', category: 'Lazer' }])
-    const client = makeClient({
-      listTransactions: vi.fn(async () => [pluggyTx({ description: '123456', category: null })]),
-    })
-
-    await syncConnection('conn-1', { client, today: TODAY })
-
-    expect(prismaMock.transaction.upsert.mock.calls[0][0].create.category).toBeNull()
-  })
-
-  it('a regra do usuário vence a categoria da Pluggy', async () => {
-    prismaMock.categoryRule.findMany.mockResolvedValue([
-      { descriptionKey: 'ifood restaurante', category: 'Lazer' },
-    ])
-
-    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
-
-    const call = prismaMock.transaction.upsert.mock.calls[0][0]
-    expect(call.create.category).toBe('Lazer')
-    expect(call.update.category).toBe('Lazer')
-  })
-
-  it('nome dado às parecidas: a transação nova já chega com ele, travada', async () => {
-    prismaMock.descriptionRule.findMany.mockResolvedValue([
-      { descriptionKey: 'ifood restaurante', description: 'Almoço' },
-    ])
-    prismaMock.categoryRule.findMany.mockResolvedValue([
-      { descriptionKey: 'ifood restaurante', category: 'Lazer' },
-    ])
-
-    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
-
-    const call = prismaMock.transaction.upsert.mock.calls[0][0]
-    expect(call.create).toMatchObject({
-      description: 'Almoço',
-      descriptionKey: 'ifood restaurante',
-      descriptionLocked: true,
-      originalDescription: 'IFOOD *RESTAURANTE',
-      category: 'Lazer',
-    })
-  })
-
   it('o mesmo pluggyTransactionId numa conta nova (item renovado) faz update, não create', async () => {
     existingTxs = [
       { pluggyTransactionId: 'p-tx-1', userId: USER, categoryLocked: false, accountId: 'db-old' },
@@ -466,32 +421,6 @@ describe('syncConnection', () => {
       category: 'Delivery',
       originalDescription: 'IFOOD *RESTAURANTE',
     })
-  })
-
-  it('com descrição travada, a regra do usuário vale pela chave travada', async () => {
-    prismaMock.categoryRule.findMany.mockResolvedValue([
-      { descriptionKey: 'almoco', category: 'Lazer' },
-      { descriptionKey: 'ifood restaurante', category: 'Mercado' },
-    ])
-    manualRows = [manual({ amountCents: -4290, date: new Date('2026-10-10T00:00:00Z') })]
-
-    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
-    expect(prismaMock.transaction.create.mock.calls[0][0].data).toMatchObject({ category: 'Lazer' })
-
-    // Na sincronização seguinte a linha já existe, travada com a chave do lançamento.
-    manualRows = []
-    existingTxs = [
-      {
-        pluggyTransactionId: 'p-tx-1',
-        userId: USER,
-        categoryLocked: false,
-        accountId: 'db-p-acc-new',
-        descriptionLocked: true,
-        descriptionKey: 'almoco',
-      },
-    ]
-    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
-    expect(prismaMock.transaction.upsert.mock.calls[0][0].update).toMatchObject({ category: 'Lazer' })
   })
 
   it('descrição travada não esconde o pagamento de fatura do pareamento', async () => {

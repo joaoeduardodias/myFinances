@@ -22,11 +22,9 @@ model User {
   accounts      Account[]
   transactions  Transaction[]
   cardBills     CardBill[]
-  categoryRules CategoryRule[]
   recurrences   Recurrence[]
   payslips      Payslip[]
   categoryNecessities CategoryNecessity[]
-  descriptionRules DescriptionRule[]
   categoryLimits CategoryLimit[]
   notifications Notification[]
   pushSubscriptions PushSubscription[]
@@ -202,29 +200,6 @@ model CardBill {
 
   @@index([userId])
   @@map("card_bills")
-}
-
-model CategoryRule {
-  id             String @id @default(uuid())
-  userId         String @map("user_id")
-  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  descriptionKey String @map("description_key")
-  category       String
-
-  @@unique([userId, descriptionKey])
-  @@map("category_rules")
-}
-
-/// Nome dado pelo usuário a todas as transações com o mesmo texto do banco, inclusive as próximas.
-model DescriptionRule {
-  id             String @id @default(uuid())
-  userId         String @map("user_id")
-  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  descriptionKey String @map("description_key")
-  description    String
-
-  @@unique([userId, descriptionKey])
-  @@map("description_rules")
 }
 
 model Recurrence {

@@ -62,7 +62,8 @@ function TransactionForm({
   const [necessity, setNecessity] = useState<TransactionNecessity | null>(
     transaction.necessity,
   )
-  const [applyToSimilar, setApplyToSimilar] = useState(false)
+  // Com iguais e algo que vale para elas, o Salvar pergunta antes.
+  const [confirming, setConfirming] = useState(false)
   const [saveRecurrence, setSaveRecurrence] = useState(false)
 
   const similar = useQuery({
@@ -73,6 +74,8 @@ function TransactionForm({
   const isRecurrence = similar.data?.recurrenceStatus === 'CONFIRMED'
   const descriptionChanged =
     description.trim() !== transaction.description.trim()
+  const categoryChanged =
+    !!category && category !== (transaction.category ?? '')
 
   const categories = useQuery({
     queryKey: ['categories'],
@@ -81,20 +84,20 @@ function TransactionForm({
   const categoryNames = categories.data ?? []
 
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (applyToSimilar: boolean) => {
       if (descriptionChanged) {
         await setTransactionDescription(
           transaction.id,
           description.trim(),
-          applyToSimilar && similarCount > 0,
+          applyToSimilar,
         )
       }
       // Depois da descrição: o recorrente leva o nome novo.
       if (saveRecurrence && !isRecurrence) {
         await saveTransactionRecurrence(transaction.id)
       }
-      if (category && category !== (transaction.category ?? '')) {
-        await setTransactionCategory(transaction.id, category)
+      if (categoryChanged) {
+        await setTransactionCategory(transaction.id, category, applyToSimilar)
       }
       if (necessity !== transaction.necessity) {
         await setTransactionNecessity(transaction.id, necessity)
@@ -112,8 +115,10 @@ function TransactionForm({
           'transaction-similar',
         ].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
       ),
-    onError: () =>
-      toast.error('Não foi possível salvar a transação. Tente novamente.'),
+    onError: () => {
+      setConfirming(false)
+      toast.error('Não foi possível salvar a transação. Tente novamente.')
+    },
   })
 
   return (
@@ -129,7 +134,11 @@ function TransactionForm({
         className="flex flex-col gap-4"
         onSubmit={(e) => {
           e.preventDefault()
-          save.mutate()
+          if (similarCount > 0 && (descriptionChanged || categoryChanged)) {
+            setConfirming(true)
+          } else {
+            save.mutate(false)
+          }
         }}
       >
         <div className="flex flex-col gap-2">
@@ -139,16 +148,6 @@ function TransactionForm({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
-          {descriptionChanged && similarCount > 0 && (
-            <CheckboxField
-              id="transaction-apply-similar"
-              checked={applyToSimilar}
-              onChange={setApplyToSimilar}
-            >
-              Aplicar também às outras {similarCount}{' '}
-              {similarCount === 1 ? 'parecida' : 'parecidas'} e às próximas
-            </CheckboxField>
-          )}
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="transaction-category">Categoria</Label>
@@ -203,14 +202,42 @@ function TransactionForm({
               : 'Salvar como recorrente'}
           </CheckboxField>
         )}
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={save.isPending}>
-            Salvar
-          </Button>
-        </DialogFooter>
+        {confirming ? (
+          <div className="flex flex-col gap-3 rounded-md border p-3">
+            <p className="text-sm">
+              Há outras {similarCount}{' '}
+              {similarCount === 1 ? 'transação igual' : 'transações iguais'}{' '}
+              (mesmo texto, valor e conta). Aplicar a mudança{' '}
+              {similarCount === 1 ? 'nela' : 'nelas'} também?
+            </p>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={save.isPending}
+                onClick={() => save.mutate(false)}
+              >
+                Só nesta
+              </Button>
+              <Button
+                type="button"
+                disabled={save.isPending}
+                onClick={() => save.mutate(true)}
+              >
+                Confirmar para todas
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={save.isPending}>
+              Salvar
+            </Button>
+          </DialogFooter>
+        )}
       </form>
     </DialogContent>
   )

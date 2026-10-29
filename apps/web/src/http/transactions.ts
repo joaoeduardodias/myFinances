@@ -86,8 +86,15 @@ export function listTransactions(filters: TransactionFilters) {
   return api.get('transactions', { searchParams }).json<TransactionsPage>()
 }
 
-export async function setTransactionCategory(id: string, category: string) {
-  await api.patch(`transactions/${id}/category`, { json: { category } })
+/** Com `applyToSimilar`, vale também para as iguais (texto do banco, valor e conta). */
+export async function setTransactionCategory(
+  id: string,
+  category: string,
+  applyToSimilar = false,
+) {
+  await api.patch(`transactions/${id}/category`, {
+    json: { category, applyToSimilar },
+  })
 }
 
 export async function setTransactionTransfer(id: string, isTransfer: boolean) {

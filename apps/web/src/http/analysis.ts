@@ -87,7 +87,7 @@ export async function setTransactionNecessity(
   await api.patch(`transactions/${id}/necessity`, { json: { necessity } })
 }
 
-/** Com `applyToSimilar`, vale para as parecidas (mesmo texto do banco) e para as próximas. */
+/** Com `applyToSimilar`, vale também para as iguais (texto do banco, valor e conta). */
 export async function setTransactionDescription(
   id: string,
   description: string,

@@ -147,44 +147,43 @@ describe('GET /transactions', () => {
 })
 
 describe('PATCH /transactions/:id/category', () => {
-  it('trava, cria a regra e propaga às irmãs não travadas', async () => {
-    prismaMock.transaction.findFirst.mockResolvedValue({ id: txId, descriptionKey: 'ifood' })
+  const catTx = { id: txId, accountId: uuid('acc'), amountCents: -4290, descriptionKey: 'ifood' }
+  const patchCategory = (body: object) =>
+    call(updateTransactionCategory, { method: 'PATCH', url: `/transactions/${txId}/category`, body })
 
-    const res = await call(updateTransactionCategory, {
-      method: 'PATCH',
-      url: `/transactions/${txId}/category`,
-      body: { category: 'Restaurante' },
-    })
+  it('sem confirmar, trava só esta', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue(catTx)
+
+    const res = await patchCategory({ category: 'Restaurante' })
 
     expect(res.statusCode).toBe(204)
-    expect(prismaMock.transaction.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: txId },
-        data: { category: 'Restaurante', categoryLocked: true },
-      }),
-    )
-    expect(prismaMock.categoryRule.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { userId_descriptionKey: { userId: userA, descriptionKey: 'ifood' } },
-      }),
-    )
     expect(prismaMock.transaction.updateMany).toHaveBeenCalledWith({
-      where: { userId: userA, descriptionKey: 'ifood', categoryLocked: false },
-      data: { category: 'Restaurante' },
+      where: { id: txId },
+      data: { category: 'Restaurante', categoryLocked: true },
     })
   })
 
-  it('chave vazia trava só a transação, sem regra nem propagação', async () => {
-    prismaMock.transaction.findFirst.mockResolvedValue({ id: txId, descriptionKey: '' })
-    const res = await call(updateTransactionCategory, {
-      method: 'PATCH',
-      url: `/transactions/${txId}/category`,
-      body: { category: 'Outros' },
+  it('confirmado, trava esta e as iguais (texto, valor e conta)', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue(catTx)
+
+    await patchCategory({ category: 'Restaurante', applyToSimilar: true })
+
+    expect(prismaMock.transaction.updateMany).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          { id: txId },
+          { userId: userA, descriptionKey: 'ifood', amountCents: -4290, accountId: catTx.accountId, id: { not: txId } },
+        ],
+      },
+      data: { category: 'Restaurante', categoryLocked: true },
     })
+  })
+
+  it('chave vazia trava só a transação, mesmo confirmado', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue({ ...catTx, descriptionKey: '' })
+    const res = await patchCategory({ category: 'Outros', applyToSimilar: true })
     expect(res.statusCode).toBe(204)
-    expect(prismaMock.transaction.update).toHaveBeenCalled()
-    expect(prismaMock.categoryRule.upsert).not.toHaveBeenCalled()
-    expect(prismaMock.transaction.updateMany).not.toHaveBeenCalled()
+    expect(prismaMock.transaction.updateMany.mock.calls[0][0].where).toEqual({ id: txId })
   })
 
   it('categoria fora da lista dá 400', async () => {
@@ -295,6 +294,7 @@ describe('PATCH /transactions/:id/description', () => {
 
   it('PATCH description de transação da Pluggy trava e guarda o texto do banco', async () => {
     prismaMock.transaction.findFirst.mockResolvedValue({
+      id: txId,
       source: 'PLUGGY',
       description: 'PIX JOAO',
       originalDescription: null,
@@ -313,6 +313,7 @@ describe('PATCH /transactions/:id/description', () => {
 
   it('segunda edição mantém o texto do banco', async () => {
     prismaMock.transaction.findFirst.mockResolvedValue({
+      id: txId,
       source: 'PLUGGY',
       description: 'Almoço com Ana',
       originalDescription: 'PIX JOAO',
@@ -327,6 +328,7 @@ describe('PATCH /transactions/:id/description', () => {
 
   it('lançamento manual só troca a descrição', async () => {
     prismaMock.transaction.findFirst.mockResolvedValue({
+      id: txId,
       source: 'MANUAL',
       description: 'Posto',
       originalDescription: null,
@@ -341,6 +343,7 @@ describe('PATCH /transactions/:id/description', () => {
 
   it('descrição vazia volta o texto do banco', async () => {
     prismaMock.transaction.findFirst.mockResolvedValue({
+      id: txId,
       source: 'PLUGGY',
       description: 'Almoço',
       originalDescription: 'PIX JOAO',
@@ -355,6 +358,7 @@ describe('PATCH /transactions/:id/description', () => {
 
   it('descrição vazia em lançamento manual dá 400', async () => {
     prismaMock.transaction.findFirst.mockResolvedValue({
+      id: txId,
       source: 'MANUAL',
       description: 'Gasolina',
       originalDescription: null,
@@ -374,16 +378,23 @@ describe('PATCH /transactions/:id/description', () => {
   const applyAll = (description: string) =>
     call(updateTransactionDescription, { method: 'PATCH', url, body: { description, applyToSimilar: true } })
 
-  it('applyToSimilar renomeia as parecidas da Pluggy e grava o nome para as próximas', async () => {
+  const descTx = {
+    id: txId,
+    accountId: uuid('acc'),
+    amountCents: -150000,
+    descriptionKey: 'financ veiculo',
+    source: 'PLUGGY',
+  }
+
+  it('applyToSimilar renomeia as iguais (texto, valor e conta)', async () => {
     prismaMock.transaction.findFirst.mockResolvedValue({
-      source: 'PLUGGY',
+      ...descTx,
       description: 'FINANC VEICULO 3/48',
       originalDescription: null,
-      descriptionKey: 'financ veiculo',
     })
     prismaMock.transaction.findMany.mockResolvedValue([
-      { id: txId, description: 'FINANC VEICULO 3/48', originalDescription: null },
-      { id: pairId, description: 'Carro', originalDescription: 'FINANC VEICULO 2/48' },
+      { id: pairId, source: 'PLUGGY', description: 'Carro', originalDescription: 'FINANC VEICULO 2/48' },
+      { id: uuid('manual'), source: 'MANUAL', description: 'Carro', originalDescription: null },
     ])
 
     const res = await applyAll('Parcela do carro')
@@ -392,7 +403,9 @@ describe('PATCH /transactions/:id/description', () => {
     expect(prismaMock.transaction.findMany.mock.calls[0][0].where).toEqual({
       userId: userA,
       descriptionKey: 'financ veiculo',
-      source: 'PLUGGY',
+      amountCents: -150000,
+      accountId: descTx.accountId,
+      id: { not: txId },
     })
     expect(prismaMock.transaction.update.mock.calls.map((c) => c[0])).toEqual([
       {
@@ -403,36 +416,29 @@ describe('PATCH /transactions/:id/description', () => {
         where: { id: pairId },
         data: { description: 'Parcela do carro', descriptionLocked: true, originalDescription: 'FINANC VEICULO 2/48' },
       },
+      { where: { id: uuid('manual') }, data: { description: 'Parcela do carro' } },
     ])
-    expect(prismaMock.descriptionRule.upsert).toHaveBeenCalledWith({
-      where: { userId_descriptionKey: { userId: userA, descriptionKey: 'financ veiculo' } },
-      create: { userId: userA, descriptionKey: 'financ veiculo', description: 'Parcela do carro' },
-      update: { description: 'Parcela do carro' },
-    })
   })
 
-  it('sem applyToSimilar não grava regra', async () => {
+  it('sem applyToSimilar não procura as iguais', async () => {
     prismaMock.transaction.findFirst.mockResolvedValue({
-      source: 'PLUGGY',
+      ...descTx,
       description: 'FINANC VEICULO 3/48',
       originalDescription: null,
-      descriptionKey: 'financ veiculo',
     })
     await patch('Parcela do carro')
     expect(prismaMock.transaction.findMany).not.toHaveBeenCalled()
-    expect(prismaMock.descriptionRule.upsert).not.toHaveBeenCalled()
+    expect(prismaMock.transaction.update).toHaveBeenCalledTimes(1)
   })
 
-  it('vazia com applyToSimilar volta o texto do banco em todas e apaga a regra', async () => {
+  it('vazia com applyToSimilar volta o texto do banco nas iguais renomeadas', async () => {
     prismaMock.transaction.findFirst.mockResolvedValue({
-      source: 'PLUGGY',
+      ...descTx,
       description: 'Parcela do carro',
       originalDescription: 'FINANC VEICULO 3/48',
-      descriptionKey: 'financ veiculo',
     })
     prismaMock.transaction.findMany.mockResolvedValue([
-      { id: txId, description: 'Parcela do carro', originalDescription: 'FINANC VEICULO 3/48' },
-      { id: pairId, description: 'FINANC VEICULO 1/48', originalDescription: null },
+      { id: pairId, source: 'PLUGGY', description: 'FINANC VEICULO 1/48', originalDescription: null },
     ])
 
     const res = await applyAll('')
@@ -442,23 +448,6 @@ describe('PATCH /transactions/:id/description', () => {
     expect(prismaMock.transaction.update).toHaveBeenCalledWith({
       where: { id: txId },
       data: { description: 'FINANC VEICULO 3/48', descriptionLocked: false, originalDescription: null },
-    })
-    expect(prismaMock.descriptionRule.deleteMany).toHaveBeenCalledWith({
-      where: { userId: userA, descriptionKey: 'financ veiculo' },
-    })
-  })
-
-  it('vazia só nesta também apaga a regra das próximas', async () => {
-    prismaMock.transaction.findFirst.mockResolvedValue({
-      source: 'PLUGGY',
-      description: 'Parcela do carro',
-      originalDescription: 'FINANC VEICULO 3/48',
-      descriptionKey: 'financ veiculo',
-    })
-    await patch('')
-    expect(prismaMock.transaction.findMany).not.toHaveBeenCalled()
-    expect(prismaMock.descriptionRule.deleteMany).toHaveBeenCalledWith({
-      where: { userId: userA, descriptionKey: 'financ veiculo' },
     })
   })
 })
@@ -478,8 +467,8 @@ describe('GET /transactions/:id/similar', () => {
   const get = (user?: string) =>
     call(getTransactionSimilar, { method: 'GET', url: `/transactions/${txId}/similar`, user })
 
-  it('conta as outras da Pluggy com o mesmo texto e acha o recorrente do dia', async () => {
-    prismaMock.transaction.findFirst.mockResolvedValue(recurrenceTx)
+  it('conta as iguais (texto, valor e conta) e acha o recorrente do dia', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue({ ...recurrenceTx, id: txId })
     prismaMock.transaction.count.mockResolvedValue(23)
     prismaMock.recurrence.findMany.mockResolvedValue([
       { id: uuid('r1'), status: 'SUGGESTED', dayRule: 'DAY_OF_MONTH', dayValue: 14 },
@@ -492,7 +481,8 @@ describe('GET /transactions/:id/similar', () => {
     expect(prismaMock.transaction.count.mock.calls[0][0].where).toEqual({
       userId: userA,
       descriptionKey: 'financ veiculo',
-      source: 'PLUGGY',
+      amountCents: -150000,
+      accountId: recurrenceTx.accountId,
       id: { not: txId },
     })
     expect(prismaMock.recurrence.findMany.mock.calls[0][0].where).toEqual({

@@ -8,6 +8,7 @@ import { runExclusive } from '@/services/user-queue'
 
 import { BadRequestError } from '../_errors/bad-request-error'
 import { NotFoundError } from '../_errors/not-found-error'
+import { identicalTxSelect, identicalWhere } from './identical-transactions'
 
 export async function updateTransactionDescription(app: FastifyInstance) {
   app
@@ -20,7 +21,7 @@ export async function updateTransactionDescription(app: FastifyInstance) {
           tags: ['Transactions'],
           summary: 'Edit the description (empty restores the bank text on Pluggy transactions).',
           description:
-            'With applyToSimilar, every Pluggy transaction with the same bank text, and the next ones, get the name too; empty undoes it.',
+            'With applyToSimilar, the identical Pluggy transactions (bank text, amount, account) get it too.',
           operationId: 'updateTransactionDescription',
           security: [{ bearerAuth: [] }],
           params: z.object({ id: z.uuid() }),
@@ -38,7 +39,7 @@ export async function updateTransactionDescription(app: FastifyInstance) {
 
         await runExclusive(userId, async () => {
           const tx = await prisma.transaction.findFirst({
-            select: { source: true, description: true, originalDescription: true, descriptionKey: true },
+            select: { ...identicalTxSelect, source: true, description: true, originalDescription: true },
             where: { id, userId },
           })
           if (!tx) throw new NotFoundError('Transação não encontrada.')
@@ -48,24 +49,18 @@ export async function updateTransactionDescription(app: FastifyInstance) {
 
           // Nunca mexe em descriptionKey: recorrentes e categoria seguem o texto do banco.
           await prisma.$transaction(async (db) => {
-            if (tx.source === 'MANUAL') {
-              if (description) await db.transaction.update({ where: { id }, data: { description } })
-            }
+            const identical = applyToSimilar ? identicalWhere(userId, tx) : null
+            const others = identical
+              ? await db.transaction.findMany({
+                  select: { id: true, source: true, description: true, originalDescription: true },
+                  where: identical,
+                })
+              : []
 
-            // Chave vazia (descrição só de dígitos) não identifica o lançamento: só esta muda.
-            const key = tx.descriptionKey
-            const targets =
-              applyToSimilar && key
-                ? await db.transaction.findMany({
-                    select: { id: true, description: true, originalDescription: true },
-                    where: { userId, descriptionKey: key, source: 'PLUGGY' },
-                  })
-                : tx.source === 'PLUGGY'
-                  ? [{ id, description: tx.description, originalDescription: tx.originalDescription }]
-                  : []
-
-            for (const t of targets) {
-              if (description) {
+            for (const t of [tx, ...others]) {
+              if (t.source === 'MANUAL') {
+                if (description) await db.transaction.update({ where: { id: t.id }, data: { description } })
+              } else if (description) {
                 await db.transaction.update({
                   where: { id: t.id },
                   data: {
@@ -80,18 +75,6 @@ export async function updateTransactionDescription(app: FastifyInstance) {
                   data: { description: t.originalDescription, descriptionLocked: false, originalDescription: null },
                 })
               }
-            }
-
-            if (!key) return
-            if (description && applyToSimilar) {
-              await db.descriptionRule.upsert({
-                where: { userId_descriptionKey: { userId, descriptionKey: key } },
-                create: { userId, descriptionKey: key, description },
-                update: { description },
-              })
-            } else if (!description) {
-              // Voltar ao texto do banco desfaz o nome das próximas também.
-              await db.descriptionRule.deleteMany({ where: { userId, descriptionKey: key } })
             }
           })
         })

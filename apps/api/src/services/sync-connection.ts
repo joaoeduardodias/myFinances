@@ -198,16 +198,6 @@ async function syncTransactions(
 ): Promise<Map<string, string>> {
   // Conta antiga → conta nova, quando uma transação mudou de conta (item renovado).
   const renewed = new Map<string, string>()
-  const rules = await prisma.categoryRule.findMany({
-    where: { userId },
-    select: { descriptionKey: true, category: true },
-  })
-  const ruleByKey = new Map(rules.map((r) => [r.descriptionKey, r.category]))
-  const names = await prisma.descriptionRule.findMany({
-    where: { userId },
-    select: { descriptionKey: true, description: true },
-  })
-  const nameByKey = new Map(names.map((r) => [r.descriptionKey, r.description]))
 
   for (const account of accounts) {
     const remote = await client.listTransactions(account.pluggyAccountId, dateFrom)
@@ -270,16 +260,10 @@ async function syncTransactions(
       }
 
       const key = descriptionKey(tx.description)
-      // Chave vazia (descrição só de dígitos/prefixo) não casa com regra.
-      const categoryFor = (k: string) => (k && ruleByKey.get(k)) || mapPluggyCategory(tx.category)
-      const category = categoryFor(current?.descriptionLocked ? current.descriptionKey : key)
+      const category = mapPluggyCategory(tx.category)
       const date = pluggyDate(tx.date)
       const amountCents = toCents(tx.amount, tx.type)
-      // Nome que o usuário deu às parecidas: entra travado, com o texto do banco guardado.
-      const name = key ? nameByKey.get(key) : undefined
-      const described = name
-        ? { description: name, descriptionKey: key, descriptionLocked: true, originalDescription: tx.description }
-        : { description: tx.description, descriptionKey: key }
+      const described = { description: tx.description, descriptionKey: key }
       const fields = {
         // Um item renovado traz contas novas com as mesmas transações.
         accountId: account.id,
@@ -309,8 +293,6 @@ async function syncTransactions(
               whatsappMessageId: match.whatsappMessageId,
               descriptionLocked: true,
               originalDescription: tx.description,
-              // A regra do usuário vale pelo nome que ele deu.
-              category: categoryFor(match.descriptionKey),
               // A marca na mão (essencial/evitável) acompanha o lançamento.
               necessity: match.necessity,
               ...(match.categoryLocked ? { category: match.category, categoryLocked: true } : {}),

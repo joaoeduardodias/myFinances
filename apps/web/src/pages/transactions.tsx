@@ -35,6 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { getTransactionSimilar } from '@/http/analysis'
 import {
   deleteTransaction,
   listAccounts,
@@ -155,9 +156,34 @@ export function Transactions() {
   }
 
   const changeCategory = useMutation({
-    mutationFn: (v: { id: string; category: string }) =>
-      setTransactionCategory(v.id, v.category),
-    onSuccess: () => invalidate(['transactions']),
+    mutationFn: async (v: {
+      id: string
+      category: string
+      applyToSimilar: boolean
+    }) => {
+      await setTransactionCategory(v.id, v.category, v.applyToSimilar)
+      if (v.applyToSimilar) return 0
+      // Só a oferta de aplicar às iguais; a categoria já foi salva.
+      return getTransactionSimilar(v.id).then(
+        (r) => r.similar,
+        () => 0,
+      )
+    },
+    onSuccess: (similar, v) => {
+      if (similar > 0) {
+        toast(
+          `Há outras ${similar} ${similar === 1 ? 'igual' : 'iguais'} (mesmo texto, valor e conta).`,
+          {
+            action: {
+              label: `Aplicar ${similar === 1 ? 'nela' : 'nelas'}`,
+              onClick: () =>
+                changeCategory.mutate({ ...v, applyToSimilar: true }),
+            },
+          },
+        )
+      }
+      return invalidate(['transactions'])
+    },
     onError: () =>
       toast.error('Não foi possível alterar a categoria. Tente novamente.'),
   })
@@ -364,6 +390,7 @@ export function Transactions() {
                             changeCategory.mutate({
                               id: t.id,
                               category: e.target.value,
+                              applyToSimilar: false,
                             })
                           }
                         >

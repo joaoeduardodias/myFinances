@@ -230,7 +230,7 @@ describe('AnalysisPage', () => {
         false,
       ),
     )
-    expect(setTransactionCategory).toHaveBeenCalledWith('e1', 'Lazer')
+    expect(setTransactionCategory).toHaveBeenCalledWith('e1', 'Lazer', false)
     expect(setTransactionNecessity).not.toHaveBeenCalled()
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(vi.mocked(getAnalysis).mock.calls.length).toBeGreaterThan(
@@ -262,7 +262,7 @@ describe('AnalysisPage', () => {
     )
     await user.click(within(dialog).getByRole('button', { name: 'Salvar' }))
     await waitFor(() =>
-      expect(setTransactionCategory).toHaveBeenCalledWith('e1', 'Lazer'),
+      expect(setTransactionCategory).toHaveBeenCalledWith('e1', 'Lazer', false),
     )
     expect(setTransactionDescription).not.toHaveBeenCalled()
   })
@@ -298,7 +298,7 @@ describe('AnalysisPage', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
-  it('renomear as parecidas e salvar como recorrente', async () => {
+  it('com iguais, o Salvar pergunta antes de aplicar nelas', async () => {
     vi.mocked(getTransactionSimilar).mockResolvedValue({
       similar: 23,
       canSaveRecurrence: true,
@@ -312,18 +312,22 @@ describe('AnalysisPage', () => {
     const recurrence = await within(dialog).findByLabelText(
       'Salvar como recorrente',
     )
-    // A pergunta só aparece depois de mudar a descrição.
-    expect(within(dialog).queryByLabelText(/parecidas/)).toBeNull()
     const desc = within(dialog).getByLabelText('Descrição')
     await user.clear(desc)
     await user.type(desc, 'Parcela do carro')
-    await user.click(
-      within(dialog).getByLabelText(
-        'Aplicar também às outras 23 parecidas e às próximas',
-      ),
+    await user.selectOptions(
+      within(dialog).getByLabelText('Categoria'),
+      'Lazer',
     )
     await user.click(recurrence)
     await user.click(within(dialog).getByRole('button', { name: 'Salvar' }))
+    expect(
+      within(dialog).getByText(/Há outras 23 transações iguais/),
+    ).toBeInTheDocument()
+    expect(setTransactionDescription).not.toHaveBeenCalled()
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Confirmar para todas' }),
+    )
     await waitFor(() =>
       expect(saveTransactionRecurrence).toHaveBeenCalledWith('e1'),
     )
@@ -332,10 +336,34 @@ describe('AnalysisPage', () => {
       'Parcela do carro',
       true,
     )
+    expect(setTransactionCategory).toHaveBeenCalledWith('e1', 'Lazer', true)
     expect(
       vi.mocked(setTransactionDescription).mock.invocationCallOrder[0],
     ).toBeLessThan(
       vi.mocked(saveTransactionRecurrence).mock.invocationCallOrder[0],
+    )
+  })
+
+  it('com iguais, "Só nesta" não aplica nelas', async () => {
+    vi.mocked(getTransactionSimilar).mockResolvedValue({
+      similar: 1,
+      canSaveRecurrence: false,
+      recurrenceStatus: null,
+    })
+    const user = userEvent.setup()
+    renderPage({ topExpenses: [gasto] })
+    const table = await screen.findByRole('table', { name: 'Maiores gastos' })
+    await user.click(within(table).getByText('Oficina'))
+    const dialog = await screen.findByRole('dialog')
+    await waitFor(() => expect(getTransactionSimilar).toHaveBeenCalled())
+    await user.selectOptions(
+      within(dialog).getByLabelText('Categoria'),
+      'Lazer',
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Só nesta' }))
+    await waitFor(() =>
+      expect(setTransactionCategory).toHaveBeenCalledWith('e1', 'Lazer', false),
     )
   })
 
@@ -396,7 +424,7 @@ describe('AnalysisPage', () => {
     await waitFor(() =>
       expect(setTransactionNecessity).toHaveBeenCalledWith('t1', 'AVOIDABLE'),
     )
-    expect(setTransactionCategory).toHaveBeenCalledWith('t1', 'Lazer')
+    expect(setTransactionCategory).toHaveBeenCalledWith('t1', 'Lazer', false)
   })
 
   it('diálogo de padrões salva a troca de uma categoria', async () => {

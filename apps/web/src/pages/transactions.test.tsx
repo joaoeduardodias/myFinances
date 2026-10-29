@@ -2,8 +2,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
+import { toast } from 'sonner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { getTransactionSimilar } from '@/http/analysis'
 import {
   createManualTransaction,
   deleteTransaction,
@@ -25,7 +27,10 @@ vi.mock('@/http/transactions', () => ({
   createManualTransaction: vi.fn(),
   deleteTransaction: vi.fn(),
 }))
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
+vi.mock('@/http/analysis', () => ({ getTransactionSimilar: vi.fn() }))
+vi.mock('sonner', () => ({
+  toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
+}))
 
 function tx(over: Record<string, unknown> = {}) {
   return {
@@ -69,6 +74,11 @@ describe('Transactions', () => {
     vi.mocked(setTransactionTransfer).mockResolvedValue(undefined)
     vi.mocked(createManualTransaction).mockResolvedValue(undefined)
     vi.mocked(deleteTransaction).mockResolvedValue(undefined)
+    vi.mocked(getTransactionSimilar).mockResolvedValue({
+      similar: 0,
+      canSaveRecurrence: false,
+      recurrenceStatus: null,
+    })
   })
 
   it('lists transactions with signed, colored amounts', async () => {
@@ -90,8 +100,42 @@ describe('Transactions', () => {
     })
     await user.selectOptions(select, 'Uber e táxi')
     await waitFor(() =>
-      expect(setTransactionCategory).toHaveBeenCalledWith('t1', 'Uber e táxi'),
+      expect(setTransactionCategory).toHaveBeenCalledWith(
+        't1',
+        'Uber e táxi',
+        false,
+      ),
     )
+    expect(toast).not.toHaveBeenCalled()
+  })
+
+  it('com iguais, oferece aplicar nelas e só aplica ao confirmar', async () => {
+    vi.mocked(getTransactionSimilar).mockResolvedValue({
+      similar: 3,
+      canSaveRecurrence: false,
+      recurrenceStatus: null,
+    })
+    const user = userEvent.setup()
+    renderPage()
+    const select = await screen.findByRole('combobox', {
+      name: 'Categoria de Mercado',
+    })
+    await user.selectOptions(select, 'Uber e táxi')
+    await waitFor(() => expect(toast).toHaveBeenCalled())
+    expect(setTransactionCategory).toHaveBeenCalledTimes(1)
+    const [message, options] = vi.mocked(toast).mock.calls[0]
+    expect(message).toBe('Há outras 3 iguais (mesmo texto, valor e conta).')
+    const action = options?.action as { label: string; onClick: () => void }
+    expect(action.label).toBe('Aplicar nelas')
+    action.onClick()
+    await waitFor(() =>
+      expect(setTransactionCategory).toHaveBeenLastCalledWith(
+        't1',
+        'Uber e táxi',
+        true,
+      ),
+    )
+    expect(getTransactionSimilar).toHaveBeenCalledTimes(1)
   })
 
   it('toggles the transfer flag', async () => {
