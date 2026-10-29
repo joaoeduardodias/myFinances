@@ -4,7 +4,14 @@ import { formatBrl } from '@/lib/finance/money'
 import type { Projection } from '@/lib/finance/projection'
 import type { IsoDate } from '@/lib/today'
 
-import { type AdvisorIndicators, advisorIndicators, type GoalMonth, type GoalTarget, goalProgress } from './goals'
+import {
+  type AdvisorIndicators,
+  advisorIndicators,
+  type GoalMonth,
+  type GoalTarget,
+  goalProgress,
+  targetText,
+} from './goals'
 
 export type AdvisorPack = {
   today: IsoDate
@@ -149,10 +156,7 @@ const TREND_TEXT = { UP: 'em alta', DOWN: 'em queda', STABLE: 'estável' } as co
 
 function goalLine(goal: AdvisorPack['goals'][number]): string {
   const { target } = goal
-  const label =
-    target.kind === 'CATEGORY'
-      ? `${target.category} até ${money(target.targetCents)}/mês`
-      : `Sobra de pelo menos ${target.targetPercent}% da renda`
+  const label = targetText(target)
   const value = (v: number) => (target.kind === 'CATEGORY' ? money(v) : `${v}%`)
   const progress = goal.months
     .map((m) => `${monthName(m.month)} ${value(m.value)} ${m.partial ? 'até agora' : m.met ? 'cumpriu' : 'estourou'}`)

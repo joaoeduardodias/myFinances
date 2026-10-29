@@ -1,5 +1,6 @@
 import type { AnalysisMonth } from '@/lib/finance/annual-analysis'
 import { LIMIT_CATEGORIES } from '@/lib/finance/category-limits'
+import { formatBrl } from '@/lib/finance/money'
 
 /** O que a meta mede: teto de gasto numa categoria por mês ou % mínima da renda que sobra. */
 export type GoalTarget =
@@ -27,6 +28,13 @@ function savedPercent(m: AnalysisMonth): number | null {
 
 function spentIn(spend: SpendByMonth, month: string, category: string): number {
   return Math.max(0, spend.get(month)?.get(category) ?? 0)
+}
+
+/** Como a meta aparece no texto que vai ao Gemini. */
+export function targetText(target: GoalTarget): string {
+  return target.kind === 'CATEGORY'
+    ? `${target.category} até ${formatBrl(target.targetCents)}/mês`
+    : `Sobra de pelo menos ${target.targetPercent}% da renda`
 }
 
 /** Uma meta por categoria e uma de sobra. */

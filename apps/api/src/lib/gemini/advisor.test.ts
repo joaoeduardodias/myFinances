@@ -79,6 +79,21 @@ describe('answerQuestion', () => {
     ])
   })
 
+  it('a conversa anterior diz quais metas o consultor já propôs', async () => {
+    const { deps, sent } = run({ answer: 'ok' })
+    await answerQuestion(PACK, 'e então?', deps, [
+      { role: 'USER', text: 'financio?' },
+      {
+        role: 'ASSISTANT',
+        text: 'Atenção.',
+        proposals: [{ kind: 'CATEGORY', category: 'Restaurante', targetCents: 20000 }],
+      },
+    ])
+    expect(sent().contents[0].parts[0].text).toContain(
+      'Consultor: Atenção.\n(Propôs a meta: Restaurante até R$ 200,00/mês)',
+    )
+  })
+
   it('devolve só as propostas de meta válidas', async () => {
     const { deps, sent } = run({
       answer: 'Corte Delivery.',
