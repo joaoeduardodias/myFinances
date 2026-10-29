@@ -71,14 +71,13 @@ describe('AdvisorCard', () => {
   it('answer null mostra indisponível', async () => {
     setup(withSummary)
     vi.mocked(askAdvisor).mockResolvedValue({ answer: null })
-    await userEvent.type(
-      await screen.findByLabelText('Pergunte ao consultor'),
-      'oi?',
-    )
+    const input = await screen.findByLabelText('Pergunte ao consultor')
+    await userEvent.type(input, 'oi?')
     await userEvent.click(screen.getByRole('button', { name: 'Perguntar' }))
     expect(
       await screen.findByText('Perguntas indisponíveis no momento.'),
     ).toBeInTheDocument()
+    expect(input).toBeDisabled()
   })
 
   it('questionsAvailable false desabilita o campo', async () => {
@@ -93,5 +92,12 @@ describe('AdvisorCard', () => {
     setup(withSummary)
     await screen.findByText('Mercado subiu 20%')
     expect(screen.getByRole('button', { name: 'Perguntar' })).toBeDisabled()
+  })
+
+  it('não envia pergunta só com espaços (Enter)', async () => {
+    setup(withSummary)
+    const input = await screen.findByLabelText('Pergunte ao consultor')
+    await userEvent.type(input, '   {Enter}')
+    expect(askAdvisor).not.toHaveBeenCalled()
   })
 })

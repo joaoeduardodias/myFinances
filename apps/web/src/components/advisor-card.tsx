@@ -17,7 +17,7 @@ const UNAVAILABLE = 'Perguntas indisponíveis no momento.'
 
 export function AdvisorCard({ today }: { today: IsoDate }) {
   const [question, setQuestion] = useState('')
-  const { data, isError } = useQuery({
+  const { data } = useQuery({
     queryKey: ['advisor'],
     queryFn: getAdvisor,
   })
@@ -26,7 +26,7 @@ export function AdvisorCard({ today }: { today: IsoDate }) {
   })
 
   // Erro no GET não derruba o Início: o card some.
-  if (isError || !data) return null
+  if (!data) return null
 
   const trimmed = question.trim()
   const unavailable =
@@ -46,8 +46,9 @@ export function AdvisorCard({ today }: { today: IsoDate }) {
         {data.summary ? (
           <div className="flex flex-col gap-2">
             <ul className="list-disc space-y-1 pl-5">
-              {data.summary.points.map((point) => (
-                <li key={point}>{point}</li>
+              {data.summary.points.map((point, index) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: pontos podem repetir
+                <li key={`${index}-${point}`}>{point}</li>
               ))}
             </ul>
             {data.summary.day !== today && (
@@ -71,12 +72,12 @@ export function AdvisorCard({ today }: { today: IsoDate }) {
               id="advisor-question"
               value={question}
               maxLength={300}
-              disabled={!data.questionsAvailable}
+              disabled={unavailable}
               onChange={(event) => setQuestion(event.target.value)}
             />
             <Button
               type="submit"
-              disabled={!data.questionsAvailable || !trimmed || ask.isPending}
+              disabled={unavailable || !trimmed || ask.isPending}
             >
               Perguntar
             </Button>
