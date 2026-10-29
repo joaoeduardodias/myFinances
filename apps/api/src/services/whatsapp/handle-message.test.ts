@@ -14,6 +14,7 @@ vi.mock('./save-entry', () => ({ saveWhatsappEntry, undoWhatsappEntry }))
 const { handleWhatsappMessage, phoneVariants } = await import('./handle-message')
 const { resetConversation } = await import('./conversation')
 const { GeminiUnavailableError } = await import('@/lib/gemini/interpret-entry')
+const { ADVISOR_DOWN_REPLY } = await import('./replies')
 
 const draft = { description: 'Almoço', amountCents: -4500, date: '2026-10-23', category: null }
 const accounts = [
@@ -22,13 +23,14 @@ const accounts = [
 ]
 const client = { sendText: vi.fn(), downloadMedia: vi.fn() }
 const interpret = vi.fn()
+const askAdvisor = vi.fn()
 const today = '2026-10-23'
 const now = new Date('2026-10-23T15:00:00Z')
 
 function run(msg: Record<string, unknown>, at = now) {
   return handleWhatsappMessage(
     { id: 'm1', from: '5511', ...msg },
-    { client, interpret, today, now: at },
+    { client, interpret, askAdvisor, today, now: at },
   )
 }
 
@@ -298,5 +300,51 @@ describe('handleWhatsappMessage', () => {
     await run({ imageId: 'img1' })
     expect(client.downloadMedia).toHaveBeenCalledWith('img1')
     expect(interpret.mock.calls[0][0].image).toEqual({ data, mimeType: 'image/jpeg' })
+  })
+})
+
+describe('perguntas ao consultor', () => {
+  it('texto que termina em ? vai direto ao consultor, sem interpret', async () => {
+    askAdvisor.mockResolvedValueOnce({ kind: 'answer', text: 'Dá, sobram R$ 900.' })
+    await run({ text: 'dá pra comprar um tênis de 300?' })
+    expect(askAdvisor).toHaveBeenCalledWith('u1', 'dá pra comprar um tênis de 300?', today)
+    expect(interpret).not.toHaveBeenCalled()
+    expect(client.sendText).toHaveBeenCalledWith('5511', 'Dá, sobram R$ 900.')
+  })
+
+  it('lançamento com ? no fim também vai ao consultor', async () => {
+    askAdvisor.mockResolvedValueOnce({ kind: 'answer', text: 'ok' })
+    await run({ text: 'almoço 45 pix nubank?' })
+    expect(askAdvisor).toHaveBeenCalled()
+    expect(interpret).not.toHaveBeenCalled()
+    expect(saveWhatsappEntry).not.toHaveBeenCalled()
+  })
+
+  it('interpret devolvendo question chama o consultor', async () => {
+    interpret.mockResolvedValueOnce({ kind: 'question' })
+    askAdvisor.mockResolvedValueOnce({ kind: 'answer', text: 'Gastou R$ 10.' })
+    await run({ text: 'quanto gastei com mercado' })
+    expect(askAdvisor).toHaveBeenCalledWith('u1', 'quanto gastei com mercado', today)
+    expect(client.sendText).toHaveBeenCalledWith('5511', 'Gastou R$ 10.')
+  })
+
+  it('consultor indisponível responde ADVISOR_DOWN_REPLY', async () => {
+    askAdvisor.mockResolvedValueOnce({ kind: 'unavailable' })
+    await run({ text: 'posso gastar mais?' })
+    expect(client.sendText).toHaveBeenCalledWith('5511', ADVISOR_DOWN_REPLY)
+  })
+
+  it('foto com legenda ? segue para interpret', async () => {
+    client.downloadMedia.mockResolvedValue({ data: Buffer.from('x'), mimeType: 'image/jpeg' })
+    interpret.mockResolvedValueOnce({ kind: 'not_understood', reply: 'r' })
+    await run({ text: 'isso?', imageId: 'img' })
+    expect(askAdvisor).not.toHaveBeenCalled()
+    expect(interpret).toHaveBeenCalled()
+  })
+
+  it('GeminiUnavailableError do consultor cai em GEMINI_DOWN_REPLY', async () => {
+    askAdvisor.mockRejectedValueOnce(new GeminiUnavailableError('x'))
+    await run({ text: 'posso gastar mais?' })
+    expect(client.sendText).toHaveBeenCalledWith('5511', expect.stringContaining('Não consegui'))
   })
 })

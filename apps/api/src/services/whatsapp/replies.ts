@@ -52,3 +52,4 @@ export const UNSUPPORTED_REPLY = 'Por enquanto só entendo texto e foto de compr
 export const CANCELLED_REPLY = 'Cancelado.'
 export const ERROR_REPLY = 'Deu um erro aqui e não salvei. Tenta de novo em instantes.'
 export const GEMINI_DOWN_REPLY = 'Não consegui entender agora, tenta de novo em instantes.'
+export const ADVISOR_DOWN_REPLY = 'O consultor está indisponível agora. Tenta de novo mais tarde.'

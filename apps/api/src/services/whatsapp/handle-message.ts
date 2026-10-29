@@ -7,6 +7,7 @@ import {
   interpretEntry,
 } from '@/lib/gemini/interpret-entry'
 import { prisma } from '@/lib/prisma'
+import { askAdvisor } from '@/services/ask-advisor'
 import { type IsoDate, todayIso } from '@/lib/today'
 import { ensureWalletAccount } from '@/services/wallet'
 
@@ -20,6 +21,7 @@ import {
   takePending,
 } from './conversation'
 import {
+  ADVISOR_DOWN_REPLY,
   askAccountReply,
   CANCELLED_REPLY,
   ERROR_REPLY,
@@ -47,6 +49,7 @@ export type WhatsappSender = {
 type Deps = {
   client: WhatsappSender
   interpret?: typeof interpretEntry
+  askAdvisor?: typeof askAdvisor
   today?: IsoDate
   now?: Date
   log?: Pick<FastifyBaseLogger, 'info'>
@@ -139,6 +142,14 @@ async function processMessage(
 
   try {
     const interpret = deps.interpret ?? interpretEntry
+    const ask = async (question: string) => {
+      const answer = await (deps.askAdvisor ?? askAdvisor)(userId, question, today)
+      return reply(answer.kind === 'answer' ? answer.text : ADVISOR_DOWN_REPLY)
+    }
+
+    // Texto que termina em "?" é pergunta, mesmo que pareça lançamento
+    // ("almoço 45 pix nubank?"): vai direto, sem gastar a chamada do interpret.
+    if (text && !msg.imageId && text.endsWith('?')) return await ask(text)
 
     const [dbAccounts, wallet] = await Promise.all([
       prisma.account.findMany({
@@ -154,6 +165,8 @@ async function processMessage(
 
     const image = msg.imageId ? await client.downloadMedia(msg.imageId) : undefined
     const result = await interpret({ text, image, accounts, today })
+
+    if (result.kind === 'question') return ask(text ?? '')
 
     if (result.kind === 'entry') return save(result.draft, result.accountId, msg.id)
 

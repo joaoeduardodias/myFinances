@@ -137,6 +137,11 @@ describe('interpretEntry', () => {
     })
   })
 
+  it('question true vira kind question, antes do understood', async () => {
+    const { result } = run({ ...base, understood: false, question: true, direction: 'debit' })
+    expect(await result).toEqual({ kind: 'question' })
+  })
+
   it('o corpo não leva saldo e leva as categorias', async () => {
     const { fetchMock, result } = run(base)
     await result
