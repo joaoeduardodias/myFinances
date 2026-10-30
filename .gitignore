@@ -22,3 +22,6 @@ playwright-report/
 # Amostras locais (extratos, exports) que não vão para o git
 samples/
 *.tsbuildinfo
+
+# Holerite real (dados pessoais), usado só para testar o leitor localmente
+/holerite.png
