@@ -20,6 +20,7 @@ import { deletePayslip } from './payslips/delete-payslip'
 import { getPayslip } from './payslips/get-payslip'
 import { getPayslipFile } from './payslips/get-payslip-file'
 import { getPayslips } from './payslips/get-payslips'
+import { reprocessPayslip } from './payslips/reprocess-payslip'
 import { updatePayslipLines } from './payslips/update-payslip-lines'
 import { unsubscribePush } from './push/unsubscribe-push'
 import { dismissRecurrence } from './recurrences/dismiss-recurrence'
@@ -39,6 +40,7 @@ vi.mock('@/lib/storage', () => ({
   putFile: vi.fn(),
   deleteFile: vi.fn(),
   getSignedFileUrl: vi.fn(async () => 'https://signed.example/file.pdf'),
+  getFile: vi.fn(async () => Buffer.from('%PDF-1.4')),
 }))
 
 vi.mock('@/lib/pluggy/client', () => ({
@@ -204,6 +206,7 @@ describe('isolamento entre usuários', () => {
       getPayslip,
       getPayslipFile,
       updatePayslipLines,
+      reprocessPayslip,
       deletePayslip,
       getDashboard,
       getCategoryLimits,
@@ -387,6 +390,7 @@ describe('isolamento entre usuários', () => {
           lines: [{ kind: 'EARNING', description: 'x', reference: null, amountCents: 1 }],
         },
       ],
+      ['POST', 'payslips/:id/reprocess', (i) => `/payslips/${i.payslipId}/reprocess`],
       ['DELETE', 'payslips/:id', (i) => `/payslips/${i.payslipId}`],
     ]
 

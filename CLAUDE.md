@@ -29,7 +29,7 @@ Monorepo pnpm + Turborepo: `apps/api` (Fastify + Prisma) e `apps/web` (Vite + Re
 - N-ésimo dia útil acima do que o mês tem cai no último dia útil.
 - Crédito com "salario" na descrição vira recorrente já confirmado com um mês só, um por dia (salário e vale; decisão do João); no dia com dois créditos (vale + 13º) vale o menor.
 - O webhook só liga com `PLUGGY_WEBHOOK_SECRET`.
-- Leitor de holerite espera um PDF de exemplo; quando chegar, criar `POST /payslips/:id/reprocess`.
+- Leitor de holerite: só o layout da Base Frigosul (feito a partir de um print, sem o PDF original); aceita PDF ou print em PNG (OCR local com tesseract.js, sem IA; a imagem é ampliada 2× porque abaixo de 2000 px o OCR come vírgulas); reconhece só quando as verbas batem com os totais e o líquido fecha, senão fica para lançar à mão. FGTS (tipo 04) fica fora. "Ler de novo" (`POST /payslips/:id/reprocess`) troca linhas lançadas à mão só depois de confirmar.
 - Tema escuro por padrão, com seletor (decisão do João).
 - Transações: "Todos" esconde transferência entre contas; ela só aparece no filtro próprio (decisão do João).
 - Toda tabela tem ordenação por coluna (`SortableHead`; decisão do João). Tabela paginada no servidor ordena na API, não no cliente.

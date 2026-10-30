@@ -9,12 +9,17 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { env } from '@myfinances/env'
 
+import { PAYSLIP_CONTENT_TYPES, type PayslipFileType } from './payslip/file-type'
 import { toAccountEndpoint } from './s3-endpoint'
 
 export const MAX_PAYSLIP_BYTES = 5 * 1024 * 1024
 
 const READ_EXPIRES_SECONDS = 900
-const FALLBACK_DOWNLOAD_NAME = 'holerite.pdf'
+
+/** A extensão da chave foi posta por `payslipKey`; as chaves antigas são todas .pdf. */
+function fileTypeOfKey(key: string): PayslipFileType {
+  return key.endsWith('.png') ? 'png' : 'pdf'
+}
 
 const client = new S3Client({
   region: env.S3_REGION,
@@ -29,14 +34,14 @@ const client = new S3Client({
  * A chave é montada aqui, nunca aceita do cliente: o prefixo vem do usuário
  * autenticado e o nome é um UUID, então nada do que o cliente mandou entra nela.
  */
-export function payslipKey(userId: string) {
-  return `${userId}/payslips/${randomUUID()}.pdf`
+export function payslipKey(userId: string, type: PayslipFileType = 'pdf') {
+  return `${userId}/payslips/${randomUUID()}.${type}`
 }
 
 export async function putFile(
   key: string,
   body: Buffer,
-  contentType: 'application/pdf',
+  contentType: (typeof PAYSLIP_CONTENT_TYPES)[PayslipFileType],
 ) {
   await client.send(
     new PutObjectCommand({
@@ -48,21 +53,30 @@ export async function putFile(
   )
 }
 
+export async function getFile(key: string) {
+  const { Body } = await client.send(
+    new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: key }),
+  )
+  if (!Body) throw new Error(`O bucket devolveu ${key} sem conteúdo`)
+  return Buffer.from(await Body.transformToByteArray())
+}
+
 /**
  * Tira o que quebraria o cabeçalho (aspas, barra invertida, CR/LF e demais
  * caracteres de controle). Sem nada sobrando, cai num nome fixo.
  */
-function sanitizeDownloadName(name: string) {
+function sanitizeDownloadName(name: string, type: PayslipFileType) {
   const cleaned = name
     .toWellFormed()
     // biome-ignore lint/suspicious/noControlCharactersInRegex: tirar os caracteres de controle é o objetivo.
     .replace(/["\\\u0000-\u001f\u007f]/g, '')
     .trim()
-  return cleaned || FALLBACK_DOWNLOAD_NAME
+  return cleaned || `holerite.${type}`
 }
 
 export async function getSignedFileUrl(key: string, downloadName: string) {
-  const safeName = sanitizeDownloadName(downloadName)
+  const type = fileTypeOfKey(key)
+  const safeName = sanitizeDownloadName(downloadName, type)
   // O `filename` entre aspas só carrega ASCII; o nome real vai em `filename*`.
   const asciiName = safeName.replace(/[^\x20-\x7e]/g, '_')
   // `filename*` (RFC 5987) leva o nome em UTF-8 para os acentos sobreviverem;
@@ -78,7 +92,7 @@ export async function getSignedFileUrl(key: string, downloadName: string) {
       Bucket: env.S3_BUCKET,
       Key: key,
       // Forçar o tipo na resposta impede que o arquivo volte como outra coisa.
-      ResponseContentType: 'application/pdf',
+      ResponseContentType: PAYSLIP_CONTENT_TYPES[type],
       ResponseContentDisposition: `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`,
     }),
     { expiresIn: READ_EXPIRES_SECONDS },

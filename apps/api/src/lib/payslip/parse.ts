@@ -1,5 +1,9 @@
+import { parseBaseFrigosul } from './base-frigosul'
+import { detectPayslipFileType } from './file-type'
+import { readImageLines } from './image-text'
+import { readPdfLines } from './pdf-text'
+
 export type ParsedPayslip = {
-  competence: string
   grossCents: number
   netCents: number
   lines: {
@@ -10,12 +14,34 @@ export type ParsedPayslip = {
   }[]
 }
 
+function defaultParseErrorLog(error: unknown) {
+  console.warn('Holerite não abriu:', error instanceof Error ? error.message : String(error))
+}
+
+async function readLines(file: Buffer) {
+  const type = detectPayslipFileType(file)
+  if (type === 'pdf') return readPdfLines(file)
+  if (type === 'png') return readImageLines(file)
+  throw new Error('Holerite não é PDF nem PNG')
+}
+
 /**
- * Lê os valores de um holerite em PDF. Na v1 não há layout conhecido e a
- * resposta é sempre `null` (o usuário lança as linhas à mão). O leitor do
- * layout da empresa entra aqui quando houver um PDF de exemplo, junto da rota
- * `POST /payslips/:id/reprocess`.
+ * Lê os valores de um holerite em PDF ou PNG (print, por OCR). Hoje só o layout
+ * da Base Frigosul é conhecido; qualquer outro, ou um arquivo que não abre,
+ * devolve `null` e o usuário lança as linhas à mão. O erro de abertura vai
+ * para `onError`.
  */
-export function parsePayslip(_pdf: Buffer): ParsedPayslip | null {
-  return null
+export async function parsePayslip(
+  file: Buffer,
+  onError: (error: unknown) => void = defaultParseErrorLog,
+): Promise<ParsedPayslip | null> {
+  let lines: string[]
+  try {
+    lines = await readLines(file)
+  } catch (error) {
+    onError(error)
+    return null
+  }
+
+  return parseBaseFrigosul(lines)
 }

@@ -56,6 +56,7 @@ import { deletePayslip } from './routes/payslips/delete-payslip'
 import { getPayslip } from './routes/payslips/get-payslip'
 import { getPayslipFile } from './routes/payslips/get-payslip-file'
 import { getPayslips } from './routes/payslips/get-payslips'
+import { reprocessPayslip } from './routes/payslips/reprocess-payslip'
 import { updatePayslipLines } from './routes/payslips/update-payslip-lines'
 import { uploadPayslip } from './routes/payslips/upload-payslip'
 import { getPushPublicKey } from './routes/push/get-push-public-key'
@@ -201,6 +202,7 @@ app.register(uploadPayslip)
 app.register(getPayslips)
 app.register(getPayslip)
 app.register(updatePayslipLines)
+app.register(reprocessPayslip)
 app.register(getPayslipFile)
 app.register(deletePayslip)
 // Sem `PLUGGY_WEBHOOK_SECRET` a rota nem existe: um webhook sem segredo seria

@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+
 import fastifyMultipart from '@fastify/multipart'
 import type { FastifyInstance } from 'fastify'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,6 +12,12 @@ import {
   signToken,
   uuid,
 } from '@/test/helpers'
+import {
+  baseFrigosulPayslipParsed,
+  baseFrigosulPayslipPdf,
+} from '@/test/payslip-sample'
+
+const BASE_FRIGOSUL_PAYSLIP_PNG = new URL('../../../test/fixtures/base-frigosul-payslip.png', import.meta.url)
 
 const prismaMock = makePrismaMock()
 const storageMock = vi.hoisted(() => ({
@@ -17,6 +25,7 @@ const storageMock = vi.hoisted(() => ({
   payslipKey: vi.fn(),
   putFile: vi.fn(),
   getSignedFileUrl: vi.fn(),
+  getFile: vi.fn(),
   deleteFile: vi.fn(),
 }))
 
@@ -30,6 +39,7 @@ const { getPayslip } = await import('./get-payslip')
 const { updatePayslipLines } = await import('./update-payslip-lines')
 const { getPayslipFile } = await import('./get-payslip-file')
 const { deletePayslip } = await import('./delete-payslip')
+const { reprocessPayslip } = await import('./reprocess-payslip')
 const { Prisma } = await import('@/prisma/generated/client')
 
 const userA = uuid('user-a')
@@ -93,7 +103,7 @@ async function upload(parts: Part[]) {
 
 async function call(
   plugin: Parameters<typeof buildTestApp>[0],
-  opts: { method: 'GET' | 'PUT' | 'DELETE'; url: string; body?: unknown },
+  opts: { method: 'GET' | 'POST' | 'PUT' | 'DELETE'; url: string; body?: unknown },
 ) {
   const app = await buildTestApp(plugin)
   const token = await signToken(app, { sub: userA })
@@ -122,6 +132,7 @@ beforeEach(() => {
   storageMock.payslipKey.mockReset().mockImplementation((userId: string) => `${userId}/payslips/abc.pdf`)
   storageMock.putFile.mockReset().mockResolvedValue(undefined)
   storageMock.getSignedFileUrl.mockReset()
+  storageMock.getFile.mockReset()
   storageMock.deleteFile.mockReset().mockResolvedValue(undefined)
 })
 
@@ -150,6 +161,45 @@ describe('POST /payslips', () => {
     expect(data.fileSha256).toMatch(/^[0-9a-f]{64}$/)
   })
 
+  it('holerite da Base Frigosul nasce RECOGNIZED com as linhas lidas e o PDF intacto', async () => {
+    const recognized = baseFrigosulPayslipPdf()
+    prismaMock.payslip.findUnique.mockResolvedValue(null)
+    prismaMock.payslip.create.mockResolvedValue({ ...row, status: 'RECOGNIZED', grossCents: 627024, netCents: 297000 })
+
+    const res = await upload(uploadParts({ file: recognized }))
+
+    expect(res.statusCode).toBe(201)
+    const data = prismaMock.payslip.create.mock.calls[0][0].data
+    expect(data).toMatchObject({ status: 'RECOGNIZED', grossCents: 627024, netCents: 297000 })
+    expect(data.lines.create).toEqual(
+      baseFrigosulPayslipParsed.lines.map((line, position) => ({ ...line, position })),
+    )
+    expect(Buffer.compare(storageMock.putFile.mock.calls[0][1], recognized)).toBe(0)
+  })
+
+  it('print em PNG é guardado como imagem e lido por OCR', async () => {
+    const png = await readFile(BASE_FRIGOSUL_PAYSLIP_PNG)
+    prismaMock.payslip.findUnique.mockResolvedValue(null)
+    prismaMock.payslip.create.mockResolvedValue({ ...row, status: 'RECOGNIZED', fileName: 'holerite.png' })
+
+    const res = await upload(uploadParts({ file: png, filename: 'holerite.png' }))
+
+    expect(res.statusCode).toBe(201)
+    expect(storageMock.payslipKey).toHaveBeenCalledWith(userA, 'png')
+    expect(storageMock.putFile.mock.calls[0][2]).toBe('image/png')
+    const data = prismaMock.payslip.create.mock.calls[0][0].data
+    expect(data).toMatchObject({ status: 'RECOGNIZED', grossCents: 627024, netCents: 297000, fileName: 'holerite.png' })
+  }, 30_000)
+
+  it('PDF é guardado sob uma chave .pdf', async () => {
+    prismaMock.payslip.findUnique.mockResolvedValue(null)
+    prismaMock.payslip.create.mockResolvedValue(row)
+
+    await upload(uploadParts())
+
+    expect(storageMock.payslipKey).toHaveBeenCalledWith(userA, 'pdf')
+  })
+
   it('aceita os campos depois do arquivo', async () => {
     prismaMock.payslip.findUnique.mockResolvedValue(null)
     prismaMock.payslip.create.mockResolvedValue(row)
@@ -162,14 +212,14 @@ describe('POST /payslips', () => {
   it('texto renomeado para .pdf dá 400', async () => {
     const res = await upload(uploadParts({ file: Buffer.from('só um texto'), filename: 'falso.pdf' }))
     expect(res.statusCode).toBe(400)
-    expect(res.json().message).toBe('Envie um PDF')
+    expect(res.json().message).toBe('Envie um PDF ou PNG')
     expect(storageMock.putFile).not.toHaveBeenCalled()
   })
 
   it('sem arquivo dá 400', async () => {
     const res = await upload(uploadParts().slice(0, 2))
     expect(res.statusCode).toBe(400)
-    expect(res.json().message).toBe('Envie um PDF')
+    expect(res.json().message).toBe('Envie um PDF ou PNG')
   })
 
   it('arquivo de 6 MB dá 413', async () => {
@@ -406,5 +456,59 @@ describe('DELETE /payslips/:id', () => {
     const res = await call(deletePayslip, { method: 'DELETE', url: `/payslips/${payslipId}` })
     expect(res.statusCode).toBe(404)
     expect(storageMock.deleteFile).not.toHaveBeenCalled()
+  })
+})
+
+describe('POST /payslips/:id/reprocess', () => {
+  const url = `/payslips/${payslipId}/reprocess`
+
+  it('relê o PDF guardado, troca as linhas e grava RECOGNIZED', async () => {
+    prismaMock.payslip.findFirst.mockResolvedValue({ id: payslipId, fileKey: 'k' })
+    storageMock.getFile.mockResolvedValue(baseFrigosulPayslipPdf())
+    prismaMock.payslip.update.mockResolvedValue({ ...row, status: 'RECOGNIZED', grossCents: 627024, netCents: 297000 })
+    prismaMock.payslipLine.findMany.mockResolvedValue([])
+
+    const res = await call(reprocessPayslip, { method: 'POST', url })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().payslip).toMatchObject({ status: 'RECOGNIZED', grossCents: 627024, netCents: 297000 })
+    expect(prismaMock.payslip.findFirst.mock.calls[0][0].where).toEqual({ id: payslipId, userId: userA })
+    expect(storageMock.getFile).toHaveBeenCalledWith('k')
+    expect(prismaMock.payslipLine.deleteMany).toHaveBeenCalledWith({ where: { payslipId } })
+    expect(prismaMock.payslipLine.createMany.mock.calls[0][0].data).toEqual(
+      baseFrigosulPayslipParsed.lines.map((line, position) => ({ payslipId, ...line, position })),
+    )
+    expect(prismaMock.payslip.update.mock.calls[0][0].data).toEqual({
+      status: 'RECOGNIZED',
+      grossCents: 627024,
+      netCents: 297000,
+    })
+  })
+
+  it('layout que não é lido dá 400 e não mexe nas linhas', async () => {
+    prismaMock.payslip.findFirst.mockResolvedValue({ id: payslipId, fileKey: 'k' })
+    storageMock.getFile.mockResolvedValue(baseFrigosulPayslipPdf({ net: '1,00' }))
+
+    const res = await call(reprocessPayslip, { method: 'POST', url })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().message).toBe('Não foi possível ler este holerite. Lance os valores à mão.')
+    expect(prismaMock.payslipLine.deleteMany).not.toHaveBeenCalled()
+    expect(prismaMock.payslip.update).not.toHaveBeenCalled()
+  })
+
+  it('de outro usuário dá 404 e não lê o bucket', async () => {
+    prismaMock.payslip.findFirst.mockResolvedValue(null)
+
+    const res = await call(reprocessPayslip, { method: 'POST', url })
+
+    expect(res.statusCode).toBe(404)
+    expect(storageMock.getFile).not.toHaveBeenCalled()
+  })
+
+  it('sem token dá 401', async () => {
+    const app = await buildTestApp(reprocessPayslip)
+    const res = await app.inject({ method: 'POST', url })
+    expect(res.statusCode).toBe(401)
   })
 })

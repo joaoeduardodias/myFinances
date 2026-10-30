@@ -10,6 +10,7 @@ import {
   getPayslip,
   getPayslipFileUrl,
   type PayslipDetailData,
+  reprocessPayslip,
   savePayslipLines,
 } from '@/http/payslips'
 
@@ -21,6 +22,7 @@ vi.mock('@/http/payslips', async (importOriginal) => ({
   savePayslipLines: vi.fn(),
   getPayslipFileUrl: vi.fn(),
   deletePayslip: vi.fn(),
+  reprocessPayslip: vi.fn(),
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 
@@ -253,5 +255,68 @@ describe('PayslipDetail', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Excluir' }))
     await waitFor(() => expect(deletePayslip).toHaveBeenCalledWith('p1'))
     expect(await screen.findByText('Lista de holerites')).toBeInTheDocument()
+  })
+
+  it('names the download after the file type', async () => {
+    renderPage(
+      detail({ payslip: { ...detail().payslip, fileName: 'print.png' } }),
+    )
+    expect(
+      await screen.findByRole('button', { name: 'Baixar imagem' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Baixar PDF' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('reads an unrecognized payslip again and shows the lines', async () => {
+    const user = userEvent.setup()
+    vi.mocked(reprocessPayslip).mockResolvedValue({
+      payslip: detail().payslip,
+      lines: detail().lines,
+    })
+    renderPage(unrecognized())
+    const button = await screen.findByRole('button', { name: 'Ler de novo' })
+    vi.mocked(getPayslip).mockResolvedValue(detail())
+    await user.click(button)
+    await waitFor(() => expect(reprocessPayslip).toHaveBeenCalledWith('p1'))
+    expect(await screen.findByText('INSS')).toBeInTheDocument()
+    expect(toast.success).toHaveBeenCalledWith('Holerite lido.')
+  })
+
+  it('asks before reading over lines typed by hand', async () => {
+    const user = userEvent.setup()
+    vi.mocked(reprocessPayslip).mockResolvedValue({
+      payslip: detail().payslip,
+      lines: detail().lines,
+    })
+    renderPage(detail({ payslip: { ...detail().payslip, status: 'MANUAL' } }))
+    await user.click(await screen.findByRole('button', { name: 'Ler de novo' }))
+    expect(reprocessPayslip).not.toHaveBeenCalled()
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Ler de novo' }),
+    )
+    await waitFor(() => expect(reprocessPayslip).toHaveBeenCalledWith('p1'))
+  })
+
+  it('does not offer to read a recognized payslip again', async () => {
+    renderPage(detail())
+    await screen.findByText('INSS')
+    expect(
+      screen.queryByRole('button', { name: 'Ler de novo' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows an error when the payslip cannot be read', async () => {
+    const user = userEvent.setup()
+    vi.mocked(reprocessPayslip).mockRejectedValue(new Error('boom'))
+    renderPage(unrecognized())
+    await user.click(await screen.findByRole('button', { name: 'Ler de novo' }))
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        'Não foi possível ler o holerite. Tente novamente.',
+      ),
+    )
   })
 })

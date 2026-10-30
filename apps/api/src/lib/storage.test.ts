@@ -13,7 +13,7 @@ vi.mock('@aws-sdk/client-s3', async (importOriginal) => {
   return { ...actual, S3Client: class { send = send } }
 })
 
-const { deleteFile, getSignedFileUrl, payslipKey, putFile, MAX_PAYSLIP_BYTES } =
+const { deleteFile, getFile, getSignedFileUrl, payslipKey, putFile, MAX_PAYSLIP_BYTES } =
   await import('./storage')
 
 /** Input do GetObjectCommand passado ao presigner na última chamada. */
@@ -36,6 +36,10 @@ describe('storage', () => {
       expect(payslipKey('user-1')).toMatch(/^user-1\/payslips\/[0-9a-f-]{36}\.pdf$/)
     })
 
+    it('ends in .png for a print', () => {
+      expect(payslipKey('user-1', 'png')).toMatch(/^user-1\/payslips\/[0-9a-f-]{36}\.png$/)
+    })
+
     it('is unique per call', () => {
       expect(payslipKey('user-1')).not.toBe(payslipKey('user-1'))
     })
@@ -55,6 +59,25 @@ describe('storage', () => {
     })
   })
 
+  describe('getFile', () => {
+    it('reads the object into a Buffer', async () => {
+      send.mockResolvedValue({
+        Body: { transformToByteArray: async () => new Uint8Array([37, 80, 68, 70]) },
+      })
+
+      const file = await getFile('u/payslips/a.pdf')
+
+      expect(Buffer.isBuffer(file)).toBe(true)
+      expect(file.toString('latin1')).toBe('%PDF')
+      expect(send.mock.calls[0][0].input).toEqual({ Bucket: env.S3_BUCKET, Key: 'u/payslips/a.pdf' })
+    })
+
+    it('throws when the object comes back without a body', async () => {
+      send.mockResolvedValue({})
+      await expect(getFile('k')).rejects.toThrow('k')
+    })
+  })
+
   describe('getSignedFileUrl', () => {
     it('signs a 900 s GET forcing the pdf type', async () => {
       const url = await getSignedFileUrl('u/payslips/a.pdf', 'holerite.pdf')
@@ -65,6 +88,13 @@ describe('storage', () => {
         Key: 'u/payslips/a.pdf',
         ResponseContentType: 'application/pdf',
       })
+    })
+
+    it('forces the png type for a print, falling back to holerite.png', async () => {
+      await getSignedFileUrl('u/payslips/a.png', '"')
+
+      expect(signedInput()).toMatchObject({ ResponseContentType: 'image/png' })
+      expect(signedInput().ResponseContentDisposition).toContain('filename="holerite.png"')
     })
 
     it('strips quotes, backslashes and line breaks from the download name', async () => {

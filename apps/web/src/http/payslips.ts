@@ -110,6 +110,13 @@ export function savePayslipLines(id: string, input: PayslipLinesInput) {
     .json<{ payslip: Payslip; lines: PayslipLine[] }>()
 }
 
+/** Relê o PDF guardado; 400 quando o layout não é reconhecido. */
+export function reprocessPayslip(id: string) {
+  return api
+    .post(`payslips/${id}/reprocess`)
+    .json<{ payslip: Payslip; lines: PayslipLine[] }>()
+}
+
 export async function getPayslipFileUrl(id: string) {
   const { url } = await api.get(`payslips/${id}/file`).json<{ url: string }>()
   return url

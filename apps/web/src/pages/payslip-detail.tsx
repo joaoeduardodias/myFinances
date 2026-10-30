@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, Trash2 } from 'lucide-react'
+import { Download, RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -34,6 +34,7 @@ import {
   getPayslipFileUrl,
   PAYSLIP_TYPE_LABELS,
   type PayslipLine,
+  reprocessPayslip,
 } from '@/http/payslips'
 import { formatBRL, formatDate } from '@/lib/format'
 import { formatCompetence } from '@/lib/payslip'
@@ -111,6 +112,7 @@ export function PayslipDetail() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmReprocess, setConfirmReprocess] = useState(false)
 
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['payslip', id],
@@ -162,8 +164,32 @@ export function PayslipDetail() {
       ),
   })
 
+  const reprocess = useMutation({
+    mutationFn: () => reprocessPayslip(id),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['payslips'] }),
+        queryClient.invalidateQueries({ queryKey: ['payslip', id] }),
+      ])
+      toast.success('Holerite lido.')
+    },
+    onError: async (error) =>
+      toast.error(
+        await getApiErrorMessage(
+          error,
+          'Não foi possível ler o holerite. Tente novamente.',
+        ),
+      ),
+  })
+
   const payslip = data?.payslip
   const editable = payslip?.status !== 'RECOGNIZED'
+
+  // Lido de novo, o holerite troca as linhas lançadas à mão: só depois de confirmar.
+  function readAgain() {
+    if (payslip?.status === 'MANUAL') setConfirmReprocess(true)
+    else reprocess.mutate()
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 sm:p-6">
@@ -192,6 +218,17 @@ export function PayslipDetail() {
                 {`Holerite ${formatCompetence(payslip.competence)}`}
               </h1>
               <div className="flex gap-2">
+                {editable && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={reprocess.isPending}
+                    onClick={readAgain}
+                  >
+                    <RefreshCw aria-hidden />
+                    Ler de novo
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -199,7 +236,9 @@ export function PayslipDetail() {
                   onClick={openPdf}
                 >
                   <Download aria-hidden />
-                  Baixar PDF
+                  {payslip.fileName.toLowerCase().endsWith('.png')
+                    ? 'Baixar imagem'
+                    : 'Baixar PDF'}
                 </Button>
                 <Button
                   variant="outline"
@@ -279,6 +318,23 @@ export function PayslipDetail() {
           )}
         </>
       )}
+
+      <AlertDialog open={confirmReprocess} onOpenChange={setConfirmReprocess}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ler o holerite de novo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Os valores lançados à mão serão trocados pelos que estão no PDF.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => reprocess.mutate()}>
+              Ler de novo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>

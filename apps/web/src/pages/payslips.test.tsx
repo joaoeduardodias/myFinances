@@ -93,7 +93,7 @@ describe('Payslips', () => {
     renderPage()
     await openDialog(user)
     await user.upload(
-      await screen.findByLabelText('Arquivo (PDF)'),
+      await screen.findByLabelText('Arquivo (PDF ou PNG)'),
       pdf(6 * 1024 * 1024),
     )
     await user.type(screen.getByLabelText('Competência'), '2026-10')
@@ -102,17 +102,17 @@ describe('Payslips', () => {
     expect(uploadPayslip).not.toHaveBeenCalled()
   })
 
-  it('rejects a non-PDF file before calling the API', async () => {
+  it('rejects a file that is neither PDF nor PNG before calling the API', async () => {
     const user = userEvent.setup({ applyAccept: false })
     renderPage()
     await openDialog(user)
     await user.upload(
-      await screen.findByLabelText('Arquivo (PDF)'),
-      new File(['x'], 'foto.png', { type: 'image/png' }),
+      await screen.findByLabelText('Arquivo (PDF ou PNG)'),
+      new File(['x'], 'foto.jpg', { type: 'image/jpeg' }),
     )
     await user.type(screen.getByLabelText('Competência'), '2026-10')
     await user.click(screen.getByRole('button', { name: 'Enviar' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(/PDF/)
+    expect(await screen.findByRole('alert')).toHaveTextContent(/PDF ou PNG/)
     expect(uploadPayslip).not.toHaveBeenCalled()
   })
 
@@ -122,7 +122,10 @@ describe('Payslips', () => {
     renderPage()
     await openDialog(user)
     const file = pdf()
-    await user.upload(await screen.findByLabelText('Arquivo (PDF)'), file)
+    await user.upload(
+      await screen.findByLabelText('Arquivo (PDF ou PNG)'),
+      file,
+    )
     await user.type(screen.getByLabelText('Competência'), '2026-10')
     await user.selectOptions(screen.getByLabelText('Tipo'), 'THIRTEENTH')
     await user.click(screen.getByRole('button', { name: 'Enviar' }))
@@ -136,12 +139,34 @@ describe('Payslips', () => {
     expect(await screen.findByText('Detalhe novo')).toBeInTheDocument()
   })
 
+  it('uploads a PNG print', async () => {
+    const user = userEvent.setup()
+    vi.mocked(uploadPayslip).mockResolvedValue(payslip({ id: 'print' }))
+    renderPage()
+    await openDialog(user)
+    const file = new File(['x'], 'holerite.png', { type: 'image/png' })
+    await user.upload(
+      await screen.findByLabelText('Arquivo (PDF ou PNG)'),
+      file,
+    )
+    await user.type(screen.getByLabelText('Competência'), '2026-10')
+    await user.click(screen.getByRole('button', { name: 'Enviar' }))
+    await waitFor(() =>
+      expect(uploadPayslip).toHaveBeenCalledWith(
+        expect.objectContaining({ file }),
+      ),
+    )
+  })
+
   it('navigates to the existing payslip on 409', async () => {
     const user = userEvent.setup()
     vi.mocked(uploadPayslip).mockRejectedValue(new DuplicatePayslipError('p9'))
     renderPage()
     await openDialog(user)
-    await user.upload(await screen.findByLabelText('Arquivo (PDF)'), pdf())
+    await user.upload(
+      await screen.findByLabelText('Arquivo (PDF ou PNG)'),
+      pdf(),
+    )
     await user.type(screen.getByLabelText('Competência'), '2026-10')
     await user.click(screen.getByRole('button', { name: 'Enviar' }))
     expect(await screen.findByText('Detalhe p9')).toBeInTheDocument()

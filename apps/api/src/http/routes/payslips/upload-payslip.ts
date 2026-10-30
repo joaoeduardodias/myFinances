@@ -5,6 +5,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 
 import { auth } from '@/http/middlewares/auth'
+import { detectPayslipFileType, PAYSLIP_CONTENT_TYPES } from '@/lib/payslip/file-type'
 import { parsePayslip } from '@/lib/payslip/parse'
 import { prisma } from '@/lib/prisma'
 import { isUniqueViolation } from '@/lib/prisma-errors'
@@ -16,9 +17,8 @@ import { competence, payslipSchema, payslipSelect, payslipType, serializePayslip
 
 const fieldsSchema = z.object({ competence, type: payslipType })
 
-const NOT_A_PDF = 'Envie um PDF'
+const NOT_A_PAYSLIP_FILE = 'Envie um PDF ou PNG'
 const DUPLICATE = 'Este holerite já foi enviado.'
-const FALLBACK_FILE_NAME = 'holerite.pdf'
 const MAX_FILE_NAME_LENGTH = 200
 
 /**
@@ -39,7 +39,7 @@ async function readUpload(request: FastifyRequest) {
         throw new request.server.multipartErrors.RequestFileTooLargeError()
       }
       if (part.fieldname === 'file') {
-        file = { buffer, fileName: part.filename.trim().slice(0, MAX_FILE_NAME_LENGTH) || FALLBACK_FILE_NAME }
+        file = { buffer, fileName: part.filename.trim().slice(0, MAX_FILE_NAME_LENGTH) }
       }
     } else if (typeof part.value === 'string') {
       fields[part.fieldname] = part.value
@@ -58,7 +58,7 @@ export async function uploadPayslip(app: FastifyInstance) {
       {
         schema: {
           tags: ['Payslips'],
-          summary: 'Upload a payslip PDF (multipart: file, competence, type).',
+          summary: 'Upload a payslip PDF or PNG (multipart: file, competence, type).',
           operationId: 'uploadPayslip',
           security: [{ bearerAuth: [] }],
           consumes: ['multipart/form-data'],
@@ -70,9 +70,9 @@ export async function uploadPayslip(app: FastifyInstance) {
         const { fields, file } = await readUpload(request)
 
         const { competence, type } = fieldsSchema.parse(fields)
-        if (!file?.buffer.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
-          throw new BadRequestError(NOT_A_PDF)
-        }
+        const fileType = file && detectPayslipFileType(file.buffer)
+        if (!file || !fileType) throw new BadRequestError(NOT_A_PAYSLIP_FILE)
+        const fileName = file.fileName || `holerite.${fileType}`
 
         const fileSha256 = createHash('sha256').update(file.buffer).digest('hex')
         const findDuplicate = () =>
@@ -84,9 +84,14 @@ export async function uploadPayslip(app: FastifyInstance) {
         const duplicate = await findDuplicate()
         if (duplicate) throw new ConflictError(DUPLICATE, { payslipId: duplicate.id })
 
-        const parsed = parsePayslip(file.buffer)
-        const fileKey = payslipKey(userId)
-        await putFile(fileKey, file.buffer, 'application/pdf')
+        const parsed = await parsePayslip(file.buffer, (error) =>
+          request.log.warn(
+            { reason: error instanceof Error ? error.message : String(error) },
+            'Holerite não abriu',
+          ),
+        )
+        const fileKey = payslipKey(userId, fileType)
+        await putFile(fileKey, file.buffer, PAYSLIP_CONTENT_TYPES[fileType])
 
         try {
           const payslip = await prisma.payslip.create({
@@ -99,7 +104,7 @@ export async function uploadPayslip(app: FastifyInstance) {
               grossCents: parsed?.grossCents ?? null,
               netCents: parsed?.netCents ?? null,
               fileKey,
-              fileName: file.fileName,
+              fileName,
               fileSha256,
               ...(parsed
                 ? {

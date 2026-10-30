@@ -31,17 +31,25 @@ import { zodResolver } from '@/lib/zod-resolver'
 
 const MAX_BYTES = 5 * 1024 * 1024
 
-const isPdf = (file: File) =>
-  file.type === 'application/pdf' && file.name.toLowerCase().endsWith('.pdf')
+const ACCEPTED_FILES = [
+  { type: 'application/pdf', extension: '.pdf' },
+  { type: 'image/png', extension: '.png' },
+]
+
+const isAcceptedFile = (file: File) =>
+  ACCEPTED_FILES.some(
+    ({ type, extension }) =>
+      file.type === type && file.name.toLowerCase().endsWith(extension),
+  )
 
 const schema = z.object({
   file: z
     .custom<FileList>()
     .refine((files) => files?.length > 0, {
-      message: 'Selecione o arquivo PDF',
+      message: 'Selecione o arquivo PDF ou PNG',
     })
-    .refine((files) => !files?.[0] || isPdf(files[0]), {
-      message: 'O arquivo precisa ser um PDF',
+    .refine((files) => !files?.[0] || isAcceptedFile(files[0]), {
+      message: 'O arquivo precisa ser um PDF ou PNG',
     })
     .refine((files) => !files?.[0] || files[0].size <= MAX_BYTES, {
       message: 'O arquivo excede o limite de 5 MB',
@@ -113,7 +121,7 @@ export function PayslipUploadDialog() {
         <DialogHeader>
           <DialogTitle>Enviar holerite</DialogTitle>
           <DialogDescription>
-            Envie o PDF do holerite (até 5 MB).
+            Envie o PDF ou um print em PNG do holerite (até 5 MB).
           </DialogDescription>
         </DialogHeader>
         <form
@@ -122,11 +130,11 @@ export function PayslipUploadDialog() {
           noValidate
         >
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="payslip-file">Arquivo (PDF)</Label>
+            <Label htmlFor="payslip-file">Arquivo (PDF ou PNG)</Label>
             <Input
               id="payslip-file"
               type="file"
-              accept="application/pdf"
+              accept="application/pdf,image/png"
               {...register('file')}
             />
             {errors.file && (
