@@ -5,6 +5,7 @@ import {
   isBillPaymentDescription,
   isCardPaymentCreditDescription,
   isWithdrawalDescription,
+  pickTransferCounterpart,
   type TransferCandidate,
 } from './detect-transfers'
 
@@ -184,5 +185,31 @@ describe('descrições', () => {
   it('reconhece saque', () => {
     expect(isWithdrawalDescription('SAQUE 24H BANCO24HORAS')).toBe(true)
     expect(isWithdrawalDescription('Saquetto pizzaria')).toBe(false)
+  })
+})
+
+describe('pickTransferCounterpart', () => {
+  it('escolhe a perna de data mais próxima', () => {
+    const picked = pickTransferCounterpart('2026-10-21', [
+      { id: 'far', date: '2026-10-23' },
+      { id: 'near', date: '2026-10-21' },
+    ])
+    expect(picked).toBe('near')
+  })
+
+  it('no empate de data fica o menor id', () => {
+    const picked = pickTransferCounterpart('2026-10-21', [
+      { id: 'b', date: '2026-10-20' },
+      { id: 'a', date: '2026-10-22' },
+    ])
+    expect(picked).toBe('a')
+  })
+
+  it('ignora quem está a mais de 3 dias', () => {
+    expect(pickTransferCounterpart('2026-10-21', [{ id: 'x', date: '2026-10-25' }])).toBeNull()
+  })
+
+  it('sem candidatas devolve null', () => {
+    expect(pickTransferCounterpart('2026-10-21', [])).toBeNull()
   })
 })

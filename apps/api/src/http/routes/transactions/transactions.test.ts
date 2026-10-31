@@ -643,6 +643,75 @@ describe('PATCH /transactions/:id/transfer', () => {
     expect(args.data).toEqual({ isTransfer: true, transferLocked: true })
   })
 
+  it('marcar sem par liga a outra perna: valor oposto, outra conta, até 3 dias', async () => {
+    const otherId = uuid('other')
+    prismaMock.transaction.findFirst
+      .mockResolvedValueOnce({
+        id: txId,
+        transferPairId: null,
+        accountId: uuid('caixa'),
+        amountCents: -58000,
+        date: new Date('2026-10-21T00:00:00Z'),
+      })
+      .mockResolvedValueOnce(null)
+    prismaMock.transaction.findMany.mockResolvedValue([
+      { id: otherId, date: new Date('2026-10-23T00:00:00Z') },
+      { id: pairId, date: new Date('2026-10-21T00:00:00Z') },
+    ])
+
+    const res = await call(updateTransactionTransfer, {
+      method: 'PATCH',
+      url: `/transactions/${txId}/transfer`,
+      body: { isTransfer: true },
+    })
+
+    expect(res.statusCode).toBe(204)
+    const where = prismaMock.transaction.findMany.mock.calls[0][0].where
+    expect(where).toMatchObject({
+      userId: userA,
+      accountId: { not: uuid('caixa') },
+      amountCents: 58000,
+      transferPairId: null,
+      transferPairOf: null,
+      date: {
+        gte: new Date('2026-10-18T00:00:00Z'),
+        lte: new Date('2026-10-24T00:00:00Z'),
+      },
+    })
+    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+      where: { id: txId, userId: userA },
+      data: { isTransfer: true, transferLocked: true, transferPairId: pairId },
+    })
+    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+      where: { id: pairId, userId: userA },
+      data: { isTransfer: true, transferLocked: true, transferPairId: txId },
+    })
+    expect(prismaMock.transaction.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('marcar sem outra perna marca só a transação', async () => {
+    prismaMock.transaction.findFirst
+      .mockResolvedValueOnce({
+        id: txId,
+        transferPairId: null,
+        accountId: uuid('caixa'),
+        amountCents: -58000,
+        date: new Date('2026-10-21T00:00:00Z'),
+      })
+      .mockResolvedValueOnce(null)
+    prismaMock.transaction.findMany.mockResolvedValue([])
+
+    await call(updateTransactionTransfer, {
+      method: 'PATCH',
+      url: `/transactions/${txId}/transfer`,
+      body: { isTransfer: true },
+    })
+
+    const args = prismaMock.transaction.updateMany.mock.calls[0][0]
+    expect(args.where.id.in).toEqual([txId])
+    expect(args.data).toEqual({ isTransfer: true, transferLocked: true })
+  })
+
   it('transação de outro usuário dá 404', async () => {
     prismaMock.transaction.findFirst.mockResolvedValue(null)
     const res = await call(updateTransactionTransfer, {

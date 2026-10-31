@@ -1,7 +1,7 @@
 import type { IsoDate } from '@/lib/today'
 
 const DAY_MS = 86_400_000
-const MAX_DAYS_APART = 3
+export const MAX_DAYS_APART = 3
 
 export type TransferCandidate = {
   id: string
@@ -77,4 +77,24 @@ export function detectTransferPairs(txs: TransferCandidate[]): [string, string][
     pairs.push([c.out, c.in])
   }
   return pairs
+}
+
+/**
+ * A outra perna de uma transferência marcada à mão: das candidatas (valor
+ * oposto, outra conta, sem par), a de data mais próxima até 3 dias; no empate,
+ * o menor id. Sem nenhuma, a transação fica marcada sozinha.
+ */
+export function pickTransferCounterpart(
+  date: IsoDate,
+  candidates: { id: string; date: IsoDate }[],
+): string | null {
+  let best: { id: string; days: number } | null = null
+  for (const candidate of candidates) {
+    const days = daysApart(date, candidate.date)
+    if (days > MAX_DAYS_APART) continue
+    if (!best || days < best.days || (days === best.days && candidate.id < best.id)) {
+      best = { id: candidate.id, days }
+    }
+  }
+  return best?.id ?? null
 }

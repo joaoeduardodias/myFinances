@@ -23,6 +23,7 @@ Monorepo pnpm + Turborepo: `apps/api` (Fastify + Prisma) e `apps/web` (Vite + Re
 - Saque vira transferência para a Carteira.
 - Pagamento de fatura nos dois lados é transferência; no cartão, "PAGAMENTO"/"PAGTO" sem "fatura" também vale.
 - Pareamento automático só banco↔banco e banco→cartão; compra no cartão e Carteira nunca (Carteira só pelo saque).
+- Marcar transferência à mão funciona como livro caixa: liga a outra perna (valor oposto, outra conta, até 3 dias, sem par, a data mais próxima), mesmo se ela tiver sido desmarcada antes; sem outra perna, marca só a transação.
 - Item renovado: a conta antiga passa histórico, recorrentes e dias do cartão para a nova e é apagada.
 - Transação que some da Pluggy é apagada, menos com lista vazia (pode ser falha) e no dia do corte (fuso).
 - Descartado nunca volta; PATCH de recorrente não muda direção nem chave. Apagar esquece (pode voltar como sugestão).
