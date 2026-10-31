@@ -32,6 +32,7 @@ const txRow = (accountId: string, date: string, amountCents: number) => ({
   isTransfer: false,
   installmentNumber: null,
   totalInstallments: null,
+  recurrenceId: null,
 })
 
 beforeEach(() => {
@@ -56,6 +57,11 @@ beforeEach(() => {
       dayRule: 'DAY_OF_MONTH',
       dayValue: 30,
       nonBusinessDayPolicy: 'KEEP',
+      kind: 'MONTHLY',
+      status: 'CONFIRMED',
+      remainingInstallments: null,
+      remainingAsOf: null,
+      transactions: [],
       account: { type: 'BANK' },
     },
   ])
@@ -107,6 +113,8 @@ describe('loadFinanceSnapshot', () => {
         dayRule: 'DAY_OF_MONTH',
         dayValue: 30,
         nonBusinessDayPolicy: 'KEEP',
+        kind: 'MONTHLY',
+        paidOff: false,
       },
     ])
     expect(snapshot.transactions[2]).toEqual({
@@ -115,6 +123,37 @@ describe('loadFinanceSnapshot', () => {
       amountCents: 200000,
       descriptionKey: 'compra',
       isTransfer: false,
+      recurrenceId: null,
     })
+  })
+
+  it('recorrente sem conta vai sem tipo de conta e o vínculo da transação segue junto', async () => {
+    const [rent] = await prismaMock.recurrence.findMany()
+    prismaMock.recurrence.findMany.mockResolvedValue([{ ...rent, accountId: null, account: null }])
+    prismaMock.transaction.findMany.mockResolvedValue([{ ...txRow('bank', '2026-10-20', -150000), recurrenceId: 'rent' }])
+
+    const snapshot = await loadFinanceSnapshot(USER, TODAY)
+
+    expect(snapshot.recurrences[0]).toMatchObject({ accountId: null, accountType: null })
+    expect(snapshot.transactions[0].recurrenceId).toBe('rent')
+  })
+
+  it('empréstimo sem parcelas restantes vai como quitado', async () => {
+    const [rent] = await prismaMock.recurrence.findMany()
+    const loan = {
+      ...rent,
+      kind: 'LOAN',
+      remainingInstallments: 1,
+      remainingAsOf: new Date('2026-09-30T00:00:00Z'),
+      transactions: [{ date: new Date('2026-10-05T00:00:00Z') }],
+    }
+    prismaMock.recurrence.findMany.mockResolvedValue([loan, { ...loan, id: 'open-loan', transactions: [] }])
+
+    const snapshot = await loadFinanceSnapshot(USER, TODAY)
+
+    expect(snapshot.recurrences.map((r) => [r.id, r.paidOff])).toEqual([
+      ['rent', true],
+      ['open-loan', false],
+    ])
   })
 })

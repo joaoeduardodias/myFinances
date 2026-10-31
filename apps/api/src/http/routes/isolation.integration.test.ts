@@ -23,8 +23,15 @@ import { getPayslips } from './payslips/get-payslips'
 import { reprocessPayslip } from './payslips/reprocess-payslip'
 import { updatePayslipLines } from './payslips/update-payslip-lines'
 import { unsubscribePush } from './push/unsubscribe-push'
+import { createRecurrence } from './recurrences/create-recurrence'
+import { deleteRecurrence } from './recurrences/delete-recurrence'
+import { dismissLinkSuggestion } from './recurrences/dismiss-link-suggestion'
 import { dismissRecurrence } from './recurrences/dismiss-recurrence'
+import { getLinkCandidates } from './recurrences/get-link-candidates'
+import { getRecurrence } from './recurrences/get-recurrence'
 import { getRecurrences } from './recurrences/get-recurrences'
+import { linkTransactions } from './recurrences/link-transactions'
+import { unlinkTransaction } from './recurrences/unlink-transaction'
 import { updateRecurrence } from './recurrences/update-recurrence'
 import { getTransactionSimilar } from './transactions/get-transaction-similar'
 import { getTransactions } from './transactions/get-transactions'
@@ -54,6 +61,7 @@ vi.mock('@/lib/pluggy/client', () => ({
 }))
 
 const EMAIL_DOMAIN = '@isolation.integration.test'
+const ANY_UUID = '00000000-0000-4000-8000-000000000000'
 const pushEndpointA = `https://fcm.googleapis.com/fcm/send/isolation-${Date.now()}`
 
 function isoMonthsAgo(months: number, day = 10) {
@@ -200,6 +208,13 @@ describe('isolamento entre usuários', () => {
       getRecurrences,
       updateRecurrence,
       dismissRecurrence,
+      getRecurrence,
+      createRecurrence,
+      deleteRecurrence,
+      getLinkCandidates,
+      linkTransactions,
+      unlinkTransaction,
+      dismissLinkSuggestion,
       getCards,
       updateCardCycle,
       getPayslips,
@@ -378,6 +393,23 @@ describe('isolamento entre usuários', () => {
         { status: 'CONFIRMED' },
       ],
       ['POST', 'recurrences/:id/dismiss', (i) => `/recurrences/${i.recurrenceId}/dismiss`],
+      ['GET', 'recurrences/:id', (i) => `/recurrences/${i.recurrenceId}`],
+      ['DELETE', 'recurrences/:id', (i) => `/recurrences/${i.recurrenceId}`],
+      ['GET', 'recurrences/:id/link-candidates', (i) => `/recurrences/${i.recurrenceId}/link-candidates`],
+      [
+        'POST',
+        'recurrences/:id/links',
+        (i) => `/recurrences/${i.recurrenceId}/links`,
+        // A lista de casos é montada antes do `beforeAll`: o recorrente de A é que barra.
+        { transactionIds: [ANY_UUID] },
+      ],
+      ['DELETE', 'recurrences/:id/links/:transactionId', (i) => `/recurrences/${i.recurrenceId}/links/${i.transactionId}`],
+      [
+        'POST',
+        'recurrences/:id/link-dismissals',
+        (i) => `/recurrences/${i.recurrenceId}/link-dismissals`,
+        { transactionId: ANY_UUID },
+      ],
       ['PATCH', 'cards/:id', (i) => `/cards/${i.cardId}`, { closingDay: 1, dueDay: 8 }],
       ['GET', 'payslips/:id', (i) => `/payslips/${i.payslipId}`],
       ['GET', 'payslips/:id/file', (i) => `/payslips/${i.payslipId}/file`],
@@ -404,6 +436,38 @@ describe('isolamento entre usuários', () => {
       expect(res.statusCode).toBe(404)
     })
 
+    it('B não vincula a transação de A ao próprio recorrente', async () => {
+      const created = await app.inject({
+        method: 'POST',
+        url: '/recurrences',
+        headers: asB(),
+        payload: {
+          description: 'Conta de B',
+          direction: 'OUT',
+          expectedAmountCents: 1000,
+          dayRule: 'DAY_OF_MONTH',
+          dayValue: 3,
+        },
+      })
+      expect(created.statusCode).toBe(201)
+      const recurrenceB = created.json().recurrence.id
+
+      const linked = await app.inject({
+        method: 'POST',
+        url: `/recurrences/${recurrenceB}/links`,
+        headers: asB(),
+        payload: { transactionIds: [transactionId] },
+      })
+      expect(linked.statusCode).toBe(404)
+
+      const candidates = await app.inject({
+        method: 'GET',
+        url: `/recurrences/${recurrenceB}/link-candidates`,
+        headers: asB(),
+      })
+      expect(candidates.json().items.map((t: { id: string }) => t.id)).not.toContain(transactionId)
+    })
+
     it('POST /connections/:id/sync não chega ao Pluggy', async () => {
       const { pluggy } = await import('@/lib/pluggy/client')
       for (const fn of Object.values(pluggy)) expect(fn).not.toHaveBeenCalled()
@@ -419,8 +483,9 @@ describe('isolamento entre usuários', () => {
       ])
       expect(connection).not.toBeNull()
       expect(card).toMatchObject({ closingDay: 20, dueDay: 28 })
-      expect(tx).toMatchObject({ category: null, isTransfer: false })
+      expect(tx).toMatchObject({ category: null, isTransfer: false, recurrenceId: null })
       expect(recurrence.status).toBe('SUGGESTED')
+      expect(await prisma.recurrenceLinkDismissal.count({ where: { recurrenceId } })).toBe(0)
       expect(payslip).not.toBeNull()
     })
   })

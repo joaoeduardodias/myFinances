@@ -25,6 +25,10 @@ vi.mock('@/services/check-alerts', () => ({
 vi.mock('@/services/advisor-summary', () => ({
   refreshAdvisorSummaryInBackground: refreshSummaryMock,
 }))
+const syncPayrollLinksMock = vi.fn()
+vi.mock('./sync-payroll-links', () => ({ syncPayrollLinks: syncPayrollLinksMock }))
+const linkSimilarMock = vi.fn()
+vi.mock('./link-similar-transactions', () => ({ linkSimilarTransactions: linkSimilarMock }))
 vi.mock('./detect-and-store-recurrences', () => ({
   detectAndStoreRecurrences: detectAndStoreRecurrencesMock,
 }))
@@ -165,6 +169,10 @@ beforeEach(() => {
   checkAlertsMock.mockReset()
   refreshSummaryMock.mockReset()
   detectAndStoreRecurrencesMock.mockResolvedValue(0)
+  syncPayrollLinksMock.mockReset()
+  syncPayrollLinksMock.mockResolvedValue(0)
+  linkSimilarMock.mockReset()
+  linkSimilarMock.mockResolvedValue(0)
 })
 
 describe('syncConnection', () => {
@@ -195,6 +203,18 @@ describe('syncConnection', () => {
     expect(prismaMock.connection.update.mock.calls.at(-1)?.[0].data.lastSyncedAt).toBeInstanceOf(
       Date,
     )
+  })
+
+  it('vincula o salário aos empréstimos em folha antes de conferir os alarmes', async () => {
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+    expect(syncPayrollLinksMock).toHaveBeenCalledWith(USER, TODAY)
+    expect(syncPayrollLinksMock.mock.invocationCallOrder[0]).toBeLessThan(checkAlertsMock.mock.invocationCallOrder[0])
+  })
+
+  it('vincula as parcelas novas que repetem o padrão das vinculadas, antes dos alarmes', async () => {
+    await syncConnection('conn-1', { client: makeClient(), today: TODAY })
+    expect(linkSimilarMock).toHaveBeenCalledWith(USER, { today: TODAY })
+    expect(linkSimilarMock.mock.invocationCallOrder[0]).toBeLessThan(checkAlertsMock.mock.invocationCallOrder[0])
   })
 
   it('confere os alarmes depois de detectar recorrentes', async () => {
@@ -593,6 +613,17 @@ describe('syncConnection', () => {
     expect(prismaMock.transaction.create.mock.calls[0][0].data).toMatchObject({ necessity: 'AVOIDABLE' })
   })
 
+  it('o recorrente vinculado ao lançamento passa para a transação da Pluggy', async () => {
+    manualRows = [manual({ recurrenceId: 'rec-1' })]
+    const client = makeClient({
+      listTransactions: vi.fn(async () => [pluggyTx({ date: TODAY, amount: 45 })]),
+    })
+
+    await syncConnection('conn-1', { client, today: TODAY })
+
+    expect(prismaMock.transaction.create.mock.calls[0][0].data).toMatchObject({ recurrenceId: 'rec-1' })
+  })
+
   it('dois lançamentos iguais casam com duas transações diferentes', async () => {
     manualRows = [
       manual({ id: 'manual-1', amountCents: -800, whatsappMessageId: 'wamid.1' }),
@@ -967,6 +998,7 @@ type ManualRow = {
   category: string | null
   categoryLocked: boolean
   necessity: string | null
+  recurrenceId: string | null
 }
 
 function manual(extra: Partial<ManualRow>): ManualRow {
@@ -982,6 +1014,7 @@ function manual(extra: Partial<ManualRow>): ManualRow {
     category: null,
     categoryLocked: false,
     necessity: null,
+    recurrenceId: null,
     ...extra,
   }
 }

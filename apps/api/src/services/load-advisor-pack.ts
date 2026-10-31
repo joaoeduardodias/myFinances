@@ -17,36 +17,46 @@ import { loadFinanceSnapshot } from './load-finance-snapshot'
  * mão antes disso não traz os gastos da conta, por isso não conta para o início.
  */
 async function loadIncome(userId: string, from: IsoDate) {
+  // Fora da Pluggy (vale-alimentação) e empréstimo não são renda da conta.
   const incomes = await prisma.recurrence.findMany({
-    where: { userId, direction: 'IN', status: 'CONFIRMED' },
-    select: { accountId: true, descriptionKey: true, expectedAmountCents: true },
+    where: { userId, direction: 'IN', status: 'CONFIRMED', kind: 'MONTHLY' },
+    select: { id: true, accountId: true, descriptionKey: true, expectedAmountCents: true },
   })
   if (incomes.length === 0) return { firstDates: [], salary: undefined }
-  const accountIds = [...new Set(incomes.map((r) => r.accountId))]
-  const [firsts, credits] = await Promise.all([
-    prisma.transaction.groupBy({
-      by: ['accountId'],
-      where: { userId, accountId: { in: accountIds }, source: 'PLUGGY' },
-      _min: { date: true },
-    }),
-    prisma.transaction.findMany({
-      where: {
-        userId,
-        accountId: { in: accountIds },
-        descriptionKey: { in: [...new Set(incomes.map((r) => r.descriptionKey))] },
-        amountCents: { gt: 0 },
-        isTransfer: false,
-        date: { gte: toDbDate(from) },
-      },
-      select: { accountId: true, descriptionKey: true, date: true, amountCents: true },
-    }),
-  ])
+  const credits = await prisma.transaction.findMany({
+    where: {
+      userId,
+      amountCents: { gt: 0 },
+      isTransfer: false,
+      date: { gte: toDbDate(from) },
+      OR: [
+        { recurrenceId: { in: incomes.map((r) => r.id) } },
+        { descriptionKey: { in: [...new Set(incomes.map((r) => r.descriptionKey))] } },
+      ],
+    },
+    select: { accountId: true, descriptionKey: true, date: true, amountCents: true, recurrenceId: true },
+  })
+  const salary = salaryByMonth(
+    credits.map((c) => ({ ...c, date: c.date.toISOString().slice(0, 10) })),
+    incomes.map((r) => ({ ...r, expectedAmountCents: Number(r.expectedAmountCents) })),
+  )
+  // Conta da renda: a do recorrente ou, sem ela, a de onde o salário chegou.
+  const accountIds = [
+    ...new Set([
+      ...incomes.flatMap((r) => (r.accountId ? [r.accountId] : [])),
+      ...credits
+        .filter((c) => c.recurrenceId != null || incomes.some((r) => r.accountId === null && r.descriptionKey === c.descriptionKey))
+        .map((c) => c.accountId),
+    ]),
+  ]
+  const firsts = await prisma.transaction.groupBy({
+    by: ['accountId'],
+    where: { userId, accountId: { in: accountIds }, source: 'PLUGGY' },
+    _min: { date: true },
+  })
   return {
-    firstDates: firsts.flatMap((f) => (f._min.date ? [f._min.date.toISOString().slice(0, 10)] : [])),
-    salary: salaryByMonth(
-      credits.map((c) => ({ ...c, date: c.date.toISOString().slice(0, 10) })),
-      incomes.map((r) => ({ ...r, expectedAmountCents: Number(r.expectedAmountCents) })),
-    ),
+    firstDates: firsts.flatMap((f) => (f._min?.date ? [f._min.date.toISOString().slice(0, 10)] : [])),
+    salary,
   }
 }
 

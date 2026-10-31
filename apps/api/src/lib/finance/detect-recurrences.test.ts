@@ -7,7 +7,13 @@ const TODAY = '2026-10-22'
 function tx(
   date: string,
   amountCents: number,
-  extra: Partial<{ accountId: string; description: string; descriptionKey: string; isTransfer: boolean }> = {},
+  extra: Partial<{
+    accountId: string
+    description: string
+    descriptionKey: string
+    isTransfer: boolean
+    recurrenceId: string | null
+  }> = {},
 ) {
   return {
     accountId: 'acc-1',
@@ -83,6 +89,25 @@ describe('detectRecurrenceCandidates', () => {
       },
     ]
     expect(detectRecurrenceCandidates(netflix, known, TODAY)).toEqual([])
+  })
+
+  it('conhecido em outra conta também não volta: a conta não prende o recorrente', () => {
+    const known = [
+      {
+        accountId: 'acc-2',
+        descriptionKey: 'netflix com',
+        direction: 'OUT' as const,
+        dayRule: 'DAY_OF_MONTH' as const,
+        dayValue: 10,
+      },
+    ]
+    expect(detectRecurrenceCandidates(netflix, known, TODAY)).toEqual([])
+    expect(detectRecurrenceCandidates(netflix, [{ ...known[0], accountId: null }], TODAY)).toEqual([])
+  })
+
+  it('ignora transações já vinculadas a um recorrente', () => {
+    const txs = netflix.map((t) => ({ ...t, recurrenceId: 'rec-1' }))
+    expect(detectRecurrenceCandidates(txs, [], TODAY)).toEqual([])
   })
 
   it('ignora transferências', () => {
@@ -162,6 +187,14 @@ describe('detectRecurrenceCandidates', () => {
       expect(
         detectRecurrenceCandidates(october, [known('DAY_OF_MONTH', 21)], TODAY).map((c) => c.dayValue),
       ).toEqual([4])
+    })
+
+    it('salário conhecido em outra conta, no mesmo dia, não é recriado', () => {
+      expect(
+        detectRecurrenceCandidates(october, [{ ...known('NTH_BUSINESS_DAY', 4), accountId: 'acc-9' }], TODAY).map(
+          (c) => c.dayValue,
+        ),
+      ).toEqual([20])
     })
 
     it('não trata saída com "salario" como salário', () => {

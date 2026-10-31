@@ -101,7 +101,7 @@ export async function setTransactionDescription(
 export interface TransactionSimilar {
   similar: number
   canSaveRecurrence: boolean
-  recurrenceStatus: 'SUGGESTED' | 'CONFIRMED' | 'DISMISSED' | null
+  recurrenceStatus: 'SUGGESTED' | 'CONFIRMED' | 'DISMISSED' | 'PAID_OFF' | null
 }
 
 export async function getTransactionSimilar(id: string) {

@@ -24,10 +24,12 @@ type DetectionTx = {
   description: string
   descriptionKey: string
   isTransfer: boolean
+  /** Já vinculada pelo João: não é matéria-prima de sugestão. */
+  recurrenceId?: string | null
 }
 
 type KnownRecurrence = {
-  accountId: string
+  accountId: string | null
   descriptionKey: string
   direction: RecurrenceDirection
   dayRule: DayRule
@@ -42,6 +44,11 @@ const MAX_NTH_BUSINESS_DAY = 10
 
 function groupKey(accountId: string, key: string, direction: RecurrenceDirection) {
   return `${accountId}\u0000${key}\u0000${direction}`
+}
+
+/** O que já é conhecido não depende da conta: o mesmo recorrente pode sair de contas diferentes. */
+function knownKey(key: string, direction: RecurrenceDirection) {
+  return `${key}\u0000${direction}`
 }
 
 function median(values: number[]): number {
@@ -118,7 +125,6 @@ function salaryCandidates(group: DetectionTx[], known: KnownRecurrence[]): Recur
     const day = dayRuleOf(cluster, 'IN')
     const isKnown = known.some(
       (k) =>
-        k.accountId === first.accountId &&
         k.descriptionKey === first.descriptionKey &&
         k.direction === 'IN' &&
         isSameRecurrenceDay(k, day, latest.date),
@@ -147,7 +153,7 @@ function salaryCandidates(group: DetectionTx[], known: KnownRecurrence[]): Recur
 /**
  * Sugestões de recorrência a partir do histórico: o mesmo lançamento, na mesma
  * conta e no mesmo sentido, em pelo menos 3 meses, com valor e dia do mês
- * estáveis. Grupos já conhecidos (em qualquer status) não voltam. Salário é
+ * estáveis. Texto e sentido já conhecidos (em qualquer status e conta) não voltam. Salário é
  * exceção: ver `salaryCandidates`.
  */
 export function detectRecurrenceCandidates(
@@ -156,17 +162,17 @@ export function detectRecurrenceCandidates(
   today: IsoDate,
 ): RecurrenceCandidate[] {
   const from = addDays(today, -WINDOW_DAYS)
-  const knownKeys = new Set(known.map((k) => groupKey(k.accountId, k.descriptionKey, k.direction)))
+  const knownKeys = new Set(known.map((k) => knownKey(k.descriptionKey, k.direction)))
 
   const groups = new Map<string, DetectionTx[]>()
   const salaryGroups = new Map<string, DetectionTx[]>()
   for (const tx of txs) {
-    if (tx.isTransfer || tx.amountCents === 0 || !tx.descriptionKey) continue
+    if (tx.isTransfer || tx.amountCents === 0 || !tx.descriptionKey || tx.recurrenceId) continue
     if (tx.date < from || tx.date > today) continue
     const direction: RecurrenceDirection = tx.amountCents > 0 ? 'IN' : 'OUT'
     const key = groupKey(tx.accountId, tx.descriptionKey, direction)
     const target = isSalary(direction, tx.descriptionKey) ? salaryGroups : groups
-    if (target === groups && knownKeys.has(key)) continue
+    if (target === groups && knownKeys.has(knownKey(tx.descriptionKey, direction))) continue
     const group = target.get(key)
     if (group) group.push(tx)
     else target.set(key, [tx])

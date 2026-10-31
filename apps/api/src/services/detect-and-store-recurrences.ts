@@ -24,6 +24,7 @@ export async function detectAndStoreRecurrences(
       description: true,
       descriptionKey: true,
       isTransfer: true,
+      recurrenceId: true,
     },
   })
   // Todos os status: o que o usuário descartou ou já confirmou não volta como sugestão.

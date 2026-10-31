@@ -37,10 +37,12 @@ export async function saveTransactionRecurrence(app: FastifyInstance) {
 
           // Pedido explícito: vale até sobre um recorrente descartado.
           const { day, recurrence } = await findTransactionRecurrence(userId, tx)
+          // A transação de onde nasceu fica vinculada: é a primeira ocorrência identificada.
+          const link = { connect: { id: tx.id } }
           if (recurrence) {
             await prisma.recurrence.update({
               where: { id: recurrence.id },
-              data: { status: 'CONFIRMED', description: tx.description },
+              data: { status: 'CONFIRMED', description: tx.description, transactions: link },
             })
             return
           }
@@ -54,6 +56,7 @@ export async function saveTransactionRecurrence(app: FastifyInstance) {
               expectedAmountCents: Math.abs(tx.amountCents),
               ...day,
               status: 'CONFIRMED',
+              transactions: link,
             },
           })
         })

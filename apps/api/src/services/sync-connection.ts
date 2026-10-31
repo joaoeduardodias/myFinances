@@ -22,7 +22,9 @@ import { type IsoDate, todayIso } from '@/lib/today'
 import { refreshAdvisorSummaryInBackground } from './advisor-summary'
 import { checkAlertsSafely } from './check-alerts'
 import { detectAndStoreRecurrences } from './detect-and-store-recurrences'
+import { linkSimilarTransactions } from './link-similar-transactions'
 import { removeTransactions } from './remove-transactions'
+import { syncPayrollLinks } from './sync-payroll-links'
 import { runExclusive } from './user-queue'
 import { ensureWalletAccount, recomputeWalletBalance } from './wallet'
 
@@ -98,6 +100,10 @@ async function runSync(
     await pairTransfers(userId, today, transferWindowDays)
     // Depois do pareamento: transferência não vira recorrente.
     await detectAndStoreRecurrences(userId, today)
+    // A parcela nova que repete o padrão das vinculadas já entra como paga.
+    await linkSimilarTransactions(userId, { today })
+    // O salário novo é a parcela paga do empréstimo em folha.
+    await syncPayrollLinks(userId, today)
     await checkAlertsSafely(userId, today)
     // Abrir o app sincroniza; sem transação nova ou mudada, o resumo não gasta o Gemini.
     if (changed) refreshAdvisorSummaryInBackground(userId, today)
@@ -257,6 +263,7 @@ async function syncTransactions(
         category: true,
         categoryLocked: true,
         necessity: true,
+        recurrenceId: true,
       },
     })
     const manualById = new Map(manuals.map((m) => [m.id, m]))
@@ -317,6 +324,7 @@ async function syncTransactions(
               originalDescription: tx.description,
               // A marca na mão (essencial/evitável) acompanha o lançamento.
               necessity: match.necessity,
+              recurrenceId: match.recurrenceId,
               ...(match.categoryLocked ? { category: match.category, categoryLocked: true } : {}),
             },
           })
@@ -340,7 +348,7 @@ async function syncTransactions(
   return { renewed, changed }
 }
 
-const RECURRENCE_STATUS_RANK = { CONFIRMED: 2, DISMISSED: 1, SUGGESTED: 0 } as const
+const RECURRENCE_STATUS_RANK = { PAID_OFF: 3, CONFIRMED: 2, DISMISSED: 1, SUGGESTED: 0 } as const
 
 /**
  * Renovar o Meu Pluggy cria um item (e uma Connection) novo, com contas novas
@@ -382,11 +390,14 @@ async function mergeRenewedAccounts(
             isSameRecurrenceDay(r, recurrence, today),
         )
         if (clash) {
-          if (RECURRENCE_STATUS_RANK[recurrence.status] <= RECURRENCE_STATUS_RANK[clash.status]) {
-            await db.recurrence.delete({ where: { id: recurrence.id } })
-            continue
-          }
-          await db.recurrence.delete({ where: { id: clash.id } })
+          // Os vínculos do João passam para a que fica.
+          const [loser, winner] =
+            RECURRENCE_STATUS_RANK[recurrence.status] <= RECURRENCE_STATUS_RANK[clash.status]
+              ? [recurrence, clash]
+              : [clash, recurrence]
+          await db.transaction.updateMany({ where: { recurrenceId: loser.id }, data: { recurrenceId: winner.id } })
+          await db.recurrence.delete({ where: { id: loser.id } })
+          if (loser === recurrence) continue
         }
         await db.recurrence.update({ where: { id: recurrence.id }, data: { accountId: newId } })
       }

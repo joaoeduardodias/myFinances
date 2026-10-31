@@ -5,6 +5,7 @@ import { type CardBillView, computeCardBills } from '@/lib/finance/card-bills'
 import type { ProjectionRecurrence, ProjectionTx } from '@/lib/finance/projection'
 import { prisma } from '@/lib/prisma'
 import type { IsoDate } from '@/lib/today'
+import { recurrenceRuleSelect, toProjectionRecurrence } from '@/services/recurrence-view'
 
 /** Cobre a fatura fechada mais antiga e as parcelas futuras com folga. */
 const SNAPSHOT_WINDOW_DAYS = 400
@@ -51,6 +52,7 @@ export async function loadFinanceSnapshot(userId: string, today: IsoDate): Promi
         isTransfer: true,
         installmentNumber: true,
         totalInstallments: true,
+        recurrenceId: true,
       },
       where: {
         userId,
@@ -66,18 +68,7 @@ export async function loadFinanceSnapshot(userId: string, today: IsoDate): Promi
       where: { userId },
     }),
     prisma.recurrence.findMany({
-      select: {
-        id: true,
-        accountId: true,
-        description: true,
-        descriptionKey: true,
-        direction: true,
-        expectedAmountCents: true,
-        dayRule: true,
-        dayValue: true,
-        nonBusinessDayPolicy: true,
-        account: { select: { type: true } },
-      },
+      select: recurrenceRuleSelect,
       where: { userId, status: 'CONFIRMED' },
     }),
   ])
@@ -116,7 +107,7 @@ export async function loadFinanceSnapshot(userId: string, today: IsoDate): Promi
     })
   })
 
-  const recurrences = recurrenceRows.map(({ account, ...rec }) => ({ ...rec, accountType: account.type }))
+  const recurrences = recurrenceRows.map(toProjectionRecurrence)
 
   const transactions = rows.map((r) => ({
     accountId: r.accountId,
@@ -124,6 +115,7 @@ export async function loadFinanceSnapshot(userId: string, today: IsoDate): Promi
     amountCents: r.amountCents,
     descriptionKey: r.descriptionKey,
     isTransfer: r.isTransfer,
+    recurrenceId: r.recurrenceId,
   }))
 
   return { accounts, cardBills, cardsMissingCycle, recurrences, transactions }

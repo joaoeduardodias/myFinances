@@ -5,7 +5,11 @@ import { salaryByMonth } from './salary'
 const salary = { accountId: 'caixa', descriptionKey: 'recebimento ted salario', expectedAmountCents: 297000 }
 const vale = { accountId: 'caixa', descriptionKey: 'recebimento ted salario', expectedAmountCents: 168900 }
 
-function credit(date: string, amountCents: number, extra: Partial<{ accountId: string; descriptionKey: string }> = {}) {
+function credit(
+  date: string,
+  amountCents: number,
+  extra: Partial<{ accountId: string; descriptionKey: string; recurrenceId: string | null }> = {},
+) {
   return { accountId: 'caixa', descriptionKey: 'recebimento ted salario', date, amountCents, ...extra }
 }
 
@@ -28,5 +32,27 @@ describe('salaryByMonth', () => {
 
   it('mês sem um dos pagamentos soma só o que veio', () => {
     expect(salaryByMonth([credit('2026-08-06', 297000)], [salary, vale]).get('2026-08')).toBe(297000)
+  })
+})
+
+describe('salaryByMonth com vínculos e sem conta', () => {
+  const linkedSalary = { ...salary, id: 'rec-salary' }
+
+  it('crédito vinculado conta mesmo com outro texto e outra conta', () => {
+    const result = salaryByMonth(
+      [credit('2026-10-06', 297000, { accountId: 'nubank', descriptionKey: 'pix', recurrenceId: 'rec-salary' })],
+      [linkedSalary],
+    )
+    expect(result.get('2026-10')).toBe(297000)
+  })
+
+  it('crédito vinculado a outro recorrente não entra pela regra', () => {
+    const result = salaryByMonth([credit('2026-10-06', 297000, { recurrenceId: 'rec-other' })], [linkedSalary])
+    expect(result.get('2026-10')).toBeUndefined()
+  })
+
+  it('renda sem conta casa pelo texto em qualquer conta', () => {
+    const result = salaryByMonth([credit('2026-10-06', 297000, { accountId: 'nubank' })], [{ ...salary, accountId: null }])
+    expect(result.get('2026-10')).toBe(297000)
   })
 })

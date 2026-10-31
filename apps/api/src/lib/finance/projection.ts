@@ -12,16 +12,26 @@ export type ProjectionTx = {
   amountCents: number
   descriptionKey: string
   isTransfer: boolean
+  /** Recorrente que o João escolheu para esta transação. */
+  recurrenceId?: string | null
 }
+
+export type RecurrenceKind = 'MONTHLY' | 'LOAN' | 'EXTERNAL'
 
 export type ProjectionRecurrence = RecurrenceRule & {
   id: string
-  accountId: string
-  accountType: AccountType
+  /** Sem conta, vale para qualquer uma (e conta como dinheiro). */
+  accountId: string | null
+  accountType: AccountType | null
   direction: 'IN' | 'OUT'
   description: string
   descriptionKey: string
   expectedAmountCents: number
+  kind?: RecurrenceKind
+  /** Empréstimo quitado (à mão ou sem parcelas restantes). */
+  paidOff?: boolean
+  /** Descontado em folha: já sai do salário, não do saldo. */
+  payrollDeduction?: boolean
 }
 
 export type Payable = {
@@ -50,7 +60,7 @@ const INCOME_LOOKAHEAD_DAYS = 62
 const DAY_MS = 86_400_000
 
 /** Dias corridos de `from` até `to` (`to − from`). */
-function daysBetween(from: IsoDate, to: IsoDate): number {
+export function daysBetween(from: IsoDate, to: IsoDate): number {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS)
 }
 
@@ -66,21 +76,42 @@ function isCashAccount(type: AccountType): boolean {
   return type === 'BANK' || type === 'WALLET'
 }
 
-function findOccurrenceTx(
+/**
+ * Recorrente que pesa no dinheiro: fora da Pluggy nunca chega ao saldo,
+ * quitado já não se paga, o descontado em folha já veio abatido do salário e
+ * o de cartão está na fatura. Sem conta conta como dinheiro.
+ */
+function affectsCash(rec: ProjectionRecurrence): boolean {
+  if (rec.kind === 'EXTERNAL' || rec.paidOff || rec.payrollDeduction) return false
+  return rec.accountType === null || isCashAccount(rec.accountType)
+}
+
+/** Pela regra (sem vínculo): mesma conta e texto ou valor a até 10%; sem conta, só o texto igual. */
+function matchesByRule(rec: ProjectionRecurrence, t: ProjectionTx): boolean {
+  if (t.recurrenceId != null) return false
+  if (t.descriptionKey === rec.descriptionKey) return rec.accountId === null || t.accountId === rec.accountId
+  // Até 10% de diferença, em inteiros para não errar por ponto flutuante.
+  return (
+    t.accountId === rec.accountId &&
+    10 * Math.abs(Math.abs(t.amountCents) - rec.expectedAmountCents) <= rec.expectedAmountCents
+  )
+}
+
+export function findOccurrenceTx(
   rec: ProjectionRecurrence,
   expected: IsoDate,
   txs: ProjectionTx[],
 ): ProjectionTx | undefined {
   const sign = rec.direction === 'IN' ? 1 : -1
-  return txs.find(
-    (t) =>
-      !t.isTransfer &&
-      t.accountId === rec.accountId &&
-      Math.sign(t.amountCents) === sign &&
-      Math.abs(daysBetween(expected, t.date)) <= MATCH_WINDOW_DAYS &&
-      (t.descriptionKey === rec.descriptionKey ||
-        // Até 10% de diferença, em inteiros para não errar por ponto flutuante.
-        10 * Math.abs(Math.abs(t.amountCents) - rec.expectedAmountCents) <= rec.expectedAmountCents),
+  const eligible = txs.filter((t) => !t.isTransfer && Math.sign(t.amountCents) === sign)
+  const near = (t: ProjectionTx) => Math.abs(daysBetween(expected, t.date)) <= MATCH_WINDOW_DAYS
+  // O vínculo do João vem antes da regra, em qualquer conta, e vale o mês todo:
+  // quem paga no dia 6 o que foi cadastrado para o 15 já pagou o mês.
+  const linked = eligible.filter((t) => t.recurrenceId === rec.id)
+  return (
+    linked.find((t) => t.date.slice(0, 7) === expected.slice(0, 7)) ??
+    linked.find(near) ??
+    eligible.find((t) => near(t) && matchesByRule(rec, t))
   )
 }
 
@@ -129,7 +160,7 @@ export function computeProjection(input: {
     .filter((a) => isCashAccount(a.type))
     .reduce((sum, a) => sum + a.balanceCents, 0)
 
-  const cashRecurrences = recurrences.filter((r) => isCashAccount(r.accountType))
+  const cashRecurrences = recurrences.filter(affectsCash)
 
   let nextIncome: Projection['nextIncome'] = null
   for (const rec of cashRecurrences.filter((r) => r.direction === 'IN')) {

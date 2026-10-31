@@ -98,6 +98,8 @@ export function makePrismaMock() {
     transaction: model(),
     cardBill: model(),
     recurrence: model(),
+    recurrenceLinkDismissal: model(),
+    recurrencePayrollLink: model(),
     payslip: model(),
     payslipLine: model(),
     categoryNecessity: model(),

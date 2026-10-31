@@ -63,8 +63,14 @@ import { getPushPublicKey } from './routes/push/get-push-public-key'
 import { subscribePush } from './routes/push/subscribe-push'
 import { unsubscribePush } from './routes/push/unsubscribe-push'
 import { createRecurrence } from './routes/recurrences/create-recurrence'
+import { deleteRecurrence } from './routes/recurrences/delete-recurrence'
+import { dismissLinkSuggestion } from './routes/recurrences/dismiss-link-suggestion'
 import { dismissRecurrence } from './routes/recurrences/dismiss-recurrence'
+import { getLinkCandidates } from './routes/recurrences/get-link-candidates'
+import { getRecurrence } from './routes/recurrences/get-recurrence'
 import { getRecurrences } from './routes/recurrences/get-recurrences'
+import { linkTransactions } from './routes/recurrences/link-transactions'
+import { unlinkTransaction } from './routes/recurrences/unlink-transaction'
 import { updateRecurrence } from './routes/recurrences/update-recurrence'
 import { createManualTransaction } from './routes/transactions/create-manual-transaction'
 import { deleteManualTransaction } from './routes/transactions/delete-manual-transaction'
@@ -168,6 +174,12 @@ app.register(getRecurrences)
 app.register(createRecurrence)
 app.register(updateRecurrence)
 app.register(dismissRecurrence)
+app.register(getRecurrence)
+app.register(deleteRecurrence)
+app.register(getLinkCandidates)
+app.register(linkTransactions)
+app.register(unlinkTransaction)
+app.register(dismissLinkSuggestion)
 app.register(getTransactions)
 app.register(updateTransactionCategory)
 app.register(updateTransactionDescription)

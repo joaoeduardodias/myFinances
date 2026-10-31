@@ -219,8 +219,19 @@ describe('renovação do Meu Pluggy', () => {
         { ...recurrence, description: 'ALUGUEL', descriptionKey: 'aluguel', direction: 'OUT', status: 'CONFIRMED' },
       ],
     })
+    // Vínculo na que vai perder a colisão: passa para a que fica.
+    const losing = await prisma.recurrence.findFirstOrThrow({
+      where: { userId, accountId: newBank.id, descriptionKey: 'salario' },
+    })
+    await prisma.transaction.updateMany({
+      where: { userId, pluggyTransactionId: pid('salary') },
+      data: { recurrenceId: losing.id },
+    })
 
     await syncConnection(newConnectionId, { client: newClient(), today: TODAY })
+
+    const salary = await prisma.recurrence.findFirstOrThrow({ where: { userId, descriptionKey: 'salario' } })
+    expect((await txByPluggyId('salary'))?.recurrenceId).toBe(salary.id)
 
     const recurrences = await prisma.recurrence.findMany({ where: { userId }, orderBy: { descriptionKey: 'asc' } })
     expect(recurrences.map((r) => [r.descriptionKey, r.status, r.dayRule])).toEqual([

@@ -461,6 +461,7 @@ const recurrenceTx = {
   isTransfer: false,
   source: 'PLUGGY',
   whatsappMessageId: null,
+  recurrenceId: null,
 }
 
 describe('GET /transactions/:id/similar', () => {
@@ -485,12 +486,24 @@ describe('GET /transactions/:id/similar', () => {
       accountId: recurrenceTx.accountId,
       id: { not: txId },
     })
+    // A conta não prende o recorrente: o mesmo texto e sentido em qualquer conta.
     expect(prismaMock.recurrence.findMany.mock.calls[0][0].where).toEqual({
       userId: userA,
-      accountId: recurrenceTx.accountId,
       descriptionKey: 'financ veiculo',
       direction: 'OUT',
     })
+  })
+
+  it('transação vinculada mostra o recorrente do vínculo', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue({ ...recurrenceTx, id: txId, recurrenceId: uuid('r9') })
+    prismaMock.transaction.count.mockResolvedValue(0)
+    prismaMock.recurrence.findFirst.mockResolvedValue({ id: uuid('r9'), status: 'CONFIRMED', dayRule: 'DAY_OF_MONTH', dayValue: 1 })
+
+    const res = await get()
+
+    expect(res.json()).toMatchObject({ recurrenceStatus: 'CONFIRMED' })
+    expect(prismaMock.recurrence.findFirst.mock.calls[0][0].where).toEqual({ id: uuid('r9'), userId: userA })
+    expect(prismaMock.recurrence.findMany).not.toHaveBeenCalled()
   })
 
   it('transferência não pode virar recorrente', async () => {
@@ -512,8 +525,8 @@ describe('GET /transactions/:id/similar', () => {
 describe('POST /transactions/:id/recurrence', () => {
   const post = () => call(saveTransactionRecurrence, { method: 'POST', url: `/transactions/${txId}/recurrence` })
 
-  it('cria o recorrente confirmado com o nome, a conta, o valor e o dia da transação', async () => {
-    prismaMock.transaction.findFirst.mockResolvedValue(recurrenceTx)
+  it('cria o recorrente confirmado com o nome, a conta, o valor e o dia da transação, já vinculado a ela', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue({ ...recurrenceTx, id: txId })
     prismaMock.recurrence.findMany.mockResolvedValue([
       // Outro dia do mês: é outra ocorrência, não esta.
       { id: uuid('r1'), status: 'CONFIRMED', dayRule: 'DAY_OF_MONTH', dayValue: 1 },
@@ -533,12 +546,13 @@ describe('POST /transactions/:id/recurrence', () => {
         dayRule: 'DAY_OF_MONTH',
         dayValue: 15,
         status: 'CONFIRMED',
+        transactions: { connect: { id: txId } },
       },
     })
   })
 
-  it('confirma e renomeia o recorrente que já existe, mesmo descartado', async () => {
-    prismaMock.transaction.findFirst.mockResolvedValue(recurrenceTx)
+  it('confirma e renomeia o recorrente que já existe, mesmo descartado, e vincula a transação', async () => {
+    prismaMock.transaction.findFirst.mockResolvedValue({ ...recurrenceTx, id: txId })
     prismaMock.recurrence.findMany.mockResolvedValue([
       { id: uuid('r1'), status: 'DISMISSED', dayRule: 'DAY_OF_MONTH', dayValue: 17 },
     ])
@@ -548,7 +562,7 @@ describe('POST /transactions/:id/recurrence', () => {
     expect(res.statusCode).toBe(204)
     expect(prismaMock.recurrence.update).toHaveBeenCalledWith({
       where: { id: uuid('r1') },
-      data: { status: 'CONFIRMED', description: 'Parcela do carro' },
+      data: { status: 'CONFIRMED', description: 'Parcela do carro', transactions: { connect: { id: txId } } },
     })
     expect(prismaMock.recurrence.create).not.toHaveBeenCalled()
   })

@@ -312,3 +312,67 @@ describe('isOccurrenceMatched', () => {
     expect(isOccurrenceMatched(voucher, '2026-10-20', [tx({ isTransfer: true })])).toBe(false)
   })
 })
+
+describe('vínculos, conta opcional e tipos', () => {
+  const tx = (overrides: Partial<ProjectionTx>): ProjectionTx => ({ ...voucherPaid, ...overrides })
+
+  it('transação vinculada cumpre a ocorrência em qualquer conta e com qualquer texto', () => {
+    const linked = tx({ accountId: 'other', descriptionKey: 'pix joao', amountCents: 50000, recurrenceId: 'voucher' })
+    expect(isOccurrenceMatched(voucher, '2026-10-20', [linked])).toBe(true)
+  })
+
+  it('vinculada vale no mesmo mês, mesmo longe do dia cadastrado (pagou no dia 6, cadastro no 15)', () => {
+    expect(isOccurrenceMatched(voucher, '2026-10-20', [tx({ date: '2026-10-02', recurrenceId: 'voucher' })])).toBe(true)
+    expect(isOccurrenceMatched(voucher, '2026-10-20', [tx({ date: '2026-10-31', recurrenceId: 'voucher' })])).toBe(true)
+  })
+
+  it('vinculada de outro mês só vale a até 5 dias, e o sinal continua exigido', () => {
+    expect(isOccurrenceMatched(voucher, '2026-10-30', [tx({ date: '2026-11-03', recurrenceId: 'voucher' })])).toBe(true)
+    expect(isOccurrenceMatched(voucher, '2026-10-20', [tx({ date: '2026-11-03', recurrenceId: 'voucher' })])).toBe(false)
+    expect(isOccurrenceMatched(voucher, '2026-10-20', [tx({ amountCents: -200000, recurrenceId: 'voucher' })])).toBe(false)
+  })
+
+  it('transação vinculada a outro recorrente não cumpre este pela regra', () => {
+    expect(isOccurrenceMatched(voucher, '2026-10-20', [tx({ recurrenceId: 'salary' })])).toBe(false)
+  })
+
+  it('recorrente sem conta casa sozinho só pelo texto igual, em qualquer conta', () => {
+    const anyAccount: ProjectionRecurrence = { ...voucher, accountId: null, accountType: null }
+    expect(isOccurrenceMatched(anyAccount, '2026-10-20', [tx({ accountId: 'other' })])).toBe(true)
+    expect(isOccurrenceMatched(anyAccount, '2026-10-20', [tx({ descriptionKey: 'pix', accountId: 'other' })])).toBe(false)
+  })
+
+  it('recorrente sem conta conta como dinheiro na projeção', () => {
+    const rentAnywhere: ProjectionRecurrence = { ...rent, accountId: null, accountType: null }
+    const projection = computeProjection({ ...baseInput, recurrences: [salary, voucher, rentAnywhere] })
+    expect(projection.payables.map((p) => p.refId)).toEqual(['rent', 'card:2026-11-03'])
+  })
+
+  it('pagamento vinculado de outra conta tira o recorrente do a pagar', () => {
+    const paid = tx({ accountId: 'other', date: '2026-10-30', descriptionKey: 'pix', amountCents: -150000, recurrenceId: 'rent' })
+    const projection = computeProjection({ ...baseInput, transactions: [voucherPaid, paid] })
+    expect(projection.payables.map((p) => p.refId)).toEqual(['card:2026-11-03'])
+  })
+
+  it('fora da Pluggy não entra na projeção, nem como próximo recebimento', () => {
+    const meal: ProjectionRecurrence = { ...voucher, id: 'meal', kind: 'EXTERNAL', accountId: null, accountType: null, dayValue: 27, expectedAmountCents: 90000 }
+    const bills: ProjectionRecurrence = { ...rent, id: 'external-out', kind: 'EXTERNAL', accountId: null, accountType: null, dayValue: 28 }
+    const projection = computeProjection({ ...baseInput, recurrences: [...baseInput.recurrences, meal, bills] })
+    expect(projection.nextIncome?.recurrenceId).toBe('salary')
+    expect(projection.payables.map((p) => p.refId)).toEqual(['rent', 'card:2026-11-03'])
+  })
+
+  it('empréstimo quitado sai do a pagar', () => {
+    const loan: ProjectionRecurrence = { ...rent, id: 'loan', kind: 'LOAN', paidOff: true, dayValue: 28 }
+    const projection = computeProjection({ ...baseInput, recurrences: [...baseInput.recurrences, loan] })
+    expect(projection.payables.map((p) => p.refId)).toEqual(['rent', 'card:2026-11-03'])
+  })
+})
+
+describe('empréstimo descontado em folha', () => {
+  it('fica fora do a pagar: a parcela já vem abatida do salário', () => {
+    const payroll: ProjectionRecurrence = { ...rent, id: 'payroll', kind: 'LOAN', payrollDeduction: true, dayValue: 28 }
+    const projection = computeProjection({ ...baseInput, recurrences: [...baseInput.recurrences, payroll] })
+    expect(projection.payables.map((p) => p.refId)).toEqual(['rent', 'card:2026-11-03'])
+  })
+})

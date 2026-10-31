@@ -91,6 +91,15 @@ enum RecurrenceStatus {
   SUGGESTED
   CONFIRMED
   DISMISSED
+  /// Empréstimo quitado à mão (sem número de parcelas informado).
+  PAID_OFF
+}
+
+enum RecurrenceKind {
+  MONTHLY
+  LOAN
+  /// Nunca passa pela Pluggy (ex.: vale-alimentação num cartão à parte).
+  EXTERNAL
 }
 
 enum PayslipType {
@@ -184,9 +193,15 @@ model Transaction {
   transferPairOf      Transaction?      @relation("TransferPair")
   installmentNumber   Int?              @map("installment_number")
   totalInstallments   Int?              @map("total_installments")
+  // Recorrente escolhido pelo João para esta transação (nunca vinculado sozinho).
+  recurrenceId        String?           @map("recurrence_id")
+  recurrence          Recurrence?       @relation(fields: [recurrenceId], references: [id], onDelete: SetNull)
+  linkDismissals      RecurrenceLinkDismissal[]
+  payrollLinks        RecurrencePayrollLink[]
   createdAt           DateTime          @default(now()) @map("created_at")
 
   @@index([userId, date])
+  @@index([recurrenceId])
   @@map("transactions")
 }
 
@@ -209,8 +224,10 @@ model Recurrence {
   id                   String               @id @default(uuid())
   userId               String               @map("user_id")
   user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accountId            String               @map("account_id")
-  account              Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  // Só informação: o vínculo vale para transações de qualquer conta.
+  accountId            String?              @map("account_id")
+  account              Account?             @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  kind                 RecurrenceKind       @default(MONTHLY)
   description          String
   descriptionKey       String               @map("description_key")
   direction            RecurrenceDirection
@@ -219,11 +236,52 @@ model Recurrence {
   dayValue             Int                  @map("day_value")
   nonBusinessDayPolicy NonBusinessDayPolicy @default(ANTICIPATE) @map("non_business_day_policy")
   status               RecurrenceStatus
+  // "Faltam N parcelas" do empréstimo e o dia em que foi informado: cada vínculo
+  // com data depois dele desconta uma.
+  remainingInstallments Int?                @map("remaining_installments")
+  remainingAsOf        DateTime?            @map("remaining_as_of") @db.Date
+  // Empréstimo descontado em folha: a parcela já vem abatida do salário, e o
+  // vínculo é com o crédito do salário (em `payrollLinks`, sem tirá-lo do recorrente dele).
+  payrollDeduction     Boolean              @default(false) @map("payroll_deduction")
+  // Recebimento de que a parcela em folha é descontada; sem ele, vale o salário principal.
+  payrollSourceId      String?              @map("payroll_source_id")
+  payrollSource        Recurrence?          @relation("PayrollSource", fields: [payrollSourceId], references: [id], onDelete: SetNull)
+  payrollLoans         Recurrence[]         @relation("PayrollSource")
   createdAt            DateTime             @default(now()) @map("created_at")
+  transactions         Transaction[]
+  linkDismissals       RecurrenceLinkDismissal[]
+  payrollLinks         RecurrencePayrollLink[]
 
   /// O dia entra na identidade: salário e vale chegam com a mesma descrição.
-  @@unique([userId, accountId, descriptionKey, direction, dayRule, dayValue])
+  /// A conta não entra: o mesmo recorrente pode ser pago de contas diferentes.
+  @@unique([userId, descriptionKey, direction, dayRule, dayValue])
   @@map("recurrences")
+}
+
+/// "Não é": a transação não volta como sugestão de vínculo deste recorrente.
+model RecurrenceLinkDismissal {
+  recurrenceId  String      @map("recurrence_id")
+  recurrence    Recurrence  @relation(fields: [recurrenceId], references: [id], onDelete: Cascade)
+  transactionId String      @map("transaction_id")
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  @@id([recurrenceId, transactionId])
+  @@map("recurrence_link_dismissals")
+}
+
+/// Crédito do salário em que a parcela do empréstimo em folha foi descontada.
+/// À parte do `Transaction.recurrenceId`: o crédito continua sendo do salário.
+model RecurrencePayrollLink {
+  recurrenceId  String      @map("recurrence_id")
+  recurrence    Recurrence  @relation(fields: [recurrenceId], references: [id], onDelete: Cascade)
+  transactionId String      @map("transaction_id")
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  @@id([recurrenceId, transactionId])
+  @@index([transactionId])
+  @@map("recurrence_payroll_links")
 }
 
 model Payslip {
